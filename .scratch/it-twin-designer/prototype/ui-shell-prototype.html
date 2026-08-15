@@ -1,0 +1,356 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>IT-Twin Designer — UI shell + visual direction prototype</title>
+<!--
+  PROTOTYPE (throwaway) — Wayfinder ticket 05: UI structure, navigation & visual direction.
+  Image verification BYPASSED per user (text-only model). Decided by dataviz method
+  (computed + validator-validated palette) + 04 + intuition, as ticket 03 was.
+  Self-contained: open from disk (zero-install spirit). Dark default, light toggle (top-right).
+  Demonstrates: app shell (5 routes), Exposure dashboard (landing), one graph node/edge
+  mock (SSN trace), table row sample, and the full color/type legend.
+-->
+<style>
+  :root[data-theme="dark"]{
+    --page:#0d0d0d; --surface:#1a1a19; --surface-2:#222220; --hairline:rgba(255,255,255,.10);
+    --ink:#ffffff; --ink-2:#c3c2b7; --muted:#898781; --grid:#2c2c2a; --baseline:#383835;
+    --border:rgba(255,255,255,.10);
+    --brand:#9085e9; --brand-strong:#7a6fd6;
+    --cls-1:#6da7ec; --cls-2:#3987e5; --cls-3:#256abf; --cls-4:#184f95;  /* Public..Restricted, dark */
+    --reach:#199e70; --reach-ink:#0d0d0d;
+    --good:#0ca30c; --warning:#fab219; --serious:#ec835a; --critical:#d03b3b;
+  }
+  :root[data-theme="light"]{
+    --page:#f9f9f7; --surface:#fcfcfb; --surface-2:#f3f2ee; --hairline:rgba(11,11,11,.10);
+    --ink:#0b0b0b; --ink-2:#52514e; --muted:#898781; --grid:#e1e0d9; --baseline:#c3c2b7;
+    --border:rgba(11,11,11,.10);
+    --brand:#4a3aa7; --brand-strong:#3a2c8a;
+    --cls-1:#86b6ef; --cls-2:#3987e5; --cls-3:#1c5cab; --cls-4:#0d366b;  /* Public..Restricted, light */
+    --reach:#1baf7a; --reach-ink:#0b0b0b;
+    --good:#0ca30c; --warning:#fab219; --serious:#ec835a; --critical:#d03b3b;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%}
+  body{
+    background:var(--page); color:var(--ink);
+    font:14px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif;
+    display:grid; grid-template-columns:232px 1fr; grid-template-rows:48px 1fr; min-height:100vh;
+  }
+  .mono{font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace}
+  .tnum{font-variant-numeric:tabular-nums}
+
+  /* ---- Shell ---- */
+  header.appbar{
+    grid-column:1/3; display:flex; align-items:center; gap:14px; padding:0 16px;
+    background:var(--surface); border-bottom:1px solid var(--border); position:sticky; top:0; z-index:5;
+  }
+  .logo{display:flex;align-items:center;gap:8px;font-weight:700;letter-spacing:.2px;color:var(--brand)}
+  .logo .dot{width:14px;height:14px;border-radius:4px;background:var(--brand)}
+  .twin-picker{display:flex;align-items:center;gap:8px;padding:4px 10px;border:1px solid var(--border);
+    border-radius:8px;background:var(--surface-2);cursor:pointer;min-width:230px}
+  .twin-picker .name{font-weight:600}
+  .twin-picker .sub{color:var(--muted);font-size:12px}
+  .twin-picker .chev{margin-left:auto;color:var(--muted)}
+  .spacer{flex:1}
+  .iconbtn{display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border:1px solid var(--border);
+    border-radius:8px;background:var(--surface-2);color:var(--ink-2);cursor:pointer;font-size:13px}
+  .iconbtn:hover{color:var(--ink);border-color:var(--brand)}
+  .primary{background:var(--brand);color:#fff;border-color:var(--brand);font-weight:600}
+  .primary:hover{background:var(--brand-strong);color:#fff}
+
+  aside.sider{background:var(--surface);border-right:1px solid var(--border);padding:10px 8px}
+  .nav-item{display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:8px;color:var(--ink-2);
+    cursor:pointer;margin-bottom:2px;font-size:13px}
+  .nav-item:hover{background:var(--surface-2);color:var(--ink)}
+  .nav-item.active{background:color-mix(in oklab,var(--brand) 18%,transparent);color:var(--brand);font-weight:600}
+  .nav-item .ic{width:16px;text-align:center;opacity:.9}
+  .nav-section{color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.08em;
+    padding:14px 12px 6px}
+
+  main.content{padding:18px 22px;overflow:auto}
+  h1.view-title{font-size:20px;margin:2px 0 2px}
+  .view-sub{color:var(--muted);margin:0 0 16px}
+
+  /* ---- Stat tiles ---- */
+  .tiles{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:18px}
+  .tile{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px 16px}
+  .tile .label{color:var(--muted);font-size:12px}
+  .tile .value{font-size:26px;font-weight:700;margin-top:4px}
+  .tile .delta{font-size:12px;margin-top:2px}
+  .tile .delta.bad{color:var(--critical)}
+  .tile .delta.ok{color:var(--good)}
+  .tile.accent{border-color:color-mix(in oklab,var(--brand) 40%,var(--border))}
+
+  /* ---- Panels ---- */
+  .panels{display:grid;grid-template-columns:1.4fr 1fr;gap:14px}
+  .panel{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:16px}
+  .panel h2{font-size:14px;margin:0 0 12px;display:flex;align-items:center;gap:8px}
+  .panel h2 .badge{font-size:11px;color:var(--muted);font-weight:500}
+
+  /* exposure-by-classification bar (ordinal blue ramp) */
+  .exp-rows{display:flex;flex-direction:column;gap:10px}
+  .exp-row{display:grid;grid-template-columns:120px 1fr 56px;align-items:center;gap:10px}
+  .exp-row .lbl{font-size:13px}
+  .exp-row .bar{height:22px;border-radius:6px;background:var(--surface-2);position:relative;overflow:hidden}
+  .exp-row .fill{height:100%;border-radius:6px}
+  .exp-row .n{font-variant-numeric:tabular-nums;text-align:right;color:var(--ink-2)}
+
+  /* top exposure paths */
+  .path{display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px dashed var(--border)}
+  .path:last-child{border-bottom:0}
+  .path .chain{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+  .path .node{font-size:12px;padding:2px 8px;border-radius:6px;background:var(--surface-2);border:1px solid var(--border)}
+  .path .arr{color:var(--muted)}
+  .path .risk{margin-left:auto}
+
+  /* ---- Graph mock ---- */
+  .graph-stage{background:var(--surface);border:1px solid var(--border);border-radius:12px;
+    padding:18px;min-height:230px;position:relative;overflow:hidden}
+  .graph-stage svg{display:block;width:100%;height:230px}
+  .cls-stripe{width:5px;border-radius:3px;flex:0 0 auto}
+
+  /* ---- Table sample ---- */
+  table.twin{width:100%;border-collapse:collapse;font-size:13px}
+  table.twin th{text-align:left;color:var(--muted);font-weight:600;padding:8px 10px;border-bottom:1px solid var(--baseline)}
+  table.twin td{padding:9px 10px;border-bottom:1px solid var(--grid)}
+  table.twin tr:hover td{background:var(--surface-2)}
+  .cls-cell{display:inline-flex;align-items:center;gap:6px}
+  .cls-dot{width:10px;height:10px;border-radius:3px}
+
+  /* ---- Chips & badges ---- */
+  .cat-chip{display:inline-flex;align-items:center;gap:5px;font-size:11px;padding:2px 7px;border-radius:6px;
+    border:1px solid var(--border);background:var(--surface-2);color:var(--ink-2)}
+  .cap-badge{display:inline-flex;align-items:center;gap:4px;font-size:10px;padding:1px 6px;border-radius:5px;
+    border:1px solid var(--border);color:var(--ink-2);letter-spacing:.02em}
+  .cap-badge .ic{opacity:.85}
+
+  /* status tag (reserved palette) */
+  .status{display:inline-flex;align-items:center;gap:5px;font-size:11px;padding:2px 8px;border-radius:6px;font-weight:600}
+  .status.good{color:var(--good)} .status.warn{color:var(--warning)} .status.crit{color:var(--critical)}
+  .status .ic{width:13px;height:13px;border-radius:50%;background:currentColor;display:inline-block;flex:0 0 auto}
+
+  /* ---- Legend ---- */
+  .legend{display:grid;grid-template-columns:repeat(2,1fr);gap:14px;margin-top:18px}
+  .legend .panel h2{margin-bottom:10px}
+  .leg-row{display:flex;align-items:center;gap:10px;font-size:12px;color:var(--ink-2);padding:5px 0}
+  .leg-row .keys{margin-left:auto;color:var(--muted)
+  }
+
+  /* reachability packet */
+  @keyframes flow { to { offset-distance:100%; } }
+  .packet{r:4;fill:var(--reach)}
+
+  /* theme toggle */
+  .toggle{position:fixed;right:18px;bottom:16px;z-index:9;display:flex;gap:4px;background:var(--surface);
+    border:1px solid var(--border);border-radius:999px;padding:4px}
+  .toggle button{border:0;background:transparent;color:var(--muted);padding:5px 12px;border-radius:999px;cursor:pointer;font-size:12px}
+  .toggle button.on{background:var(--brand);color:#fff;font-weight:600}
+  .note{position:fixed;left:18px;bottom:16px;z-index:9;font-size:11px;color:var(--muted);
+    background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:6px 10px;max-width:380px}
+</style>
+</head>
+<body>
+  <header class="appbar">
+    <div class="logo"><span class="dot"></span> IT-Twin Designer</div>
+    <div class="twin-picker" title="Switch twin">
+      <span class="dot" style="width:9px;height:9px;border-radius:3px;background:var(--brand)"></span>
+      <div>
+        <div class="name">Acme Corp — Production estate</div>
+        <div class="sub">11 Types · 47 objects · 38 relations</div>
+      </div>
+      <span class="chev">▾</span>
+    </div>
+    <div class="spacer"></div>
+    <button class="iconbtn">⤓ Export</button>
+    <button class="iconbtn">⤒ Import</button>
+    <button class="iconbtn">⚙ Settings</button>
+    <button class="iconbtn primary">▶ Run reachability</button>
+  </header>
+
+  <aside class="sider">
+    <div class="nav-section">Workspace</div>
+    <div class="nav-item active"><span class="ic">▣</span> Exposure dashboard</div>
+    <div class="nav-item"><span class="ic">❖</span> Schema builder</div>
+    <div class="nav-item"><span class="ic">⬡</span> Twin graph</div>
+    <div class="nav-item"><span class="ic">▦</span> Tables</div>
+    <div class="nav-item"><span class="ic">⟿</span> Reachability sim</div>
+    <div class="nav-section">Twin</div>
+    <div class="nav-item"><span class="ic">＋</span> New blank twin</div>
+    <div class="nav-item"><span class="ic">⎘</span> Duplicate twin</div>
+  </aside>
+
+  <main class="content">
+    <h1 class="view-title">Exposure dashboard — Acme Corp</h1>
+    <p class="view-sub">Who and what can reach your sensitive data. Counts update live from the twin.</p>
+
+    <div class="tiles">
+      <div class="tile"><div class="label">Objects</div><div class="value tnum">47</div><div class="delta">across 11 Types</div></div>
+      <div class="tile"><div class="label">Sensitive fields</div><div class="value tnum">12</div><div class="delta">Confidential + Restricted</div></div>
+      <div class="tile accent"><div class="label">Exposed sensitive fields</div><div class="value tnum">9</div><div class="delta bad">↑ reachable by a human user</div></div>
+      <div class="tile"><div class="label">Reachable paths</div><div class="value tnum">31</div><div class="delta ok">from 4 roots</div></div>
+    </div>
+
+    <div class="panels">
+      <div class="panel">
+        <h2>Sensitive-field exposure by classification <span class="badge">ordinal blue ramp · darker = more sensitive</span></h2>
+        <div class="exp-rows">
+          <div class="exp-row"><span class="lbl"><span class="cls-dot" style="background:var(--cls-1)"></span> Public</span>
+            <div class="bar"><div class="fill" style="width:78%;background:var(--cls-1)"></div></div><span class="n">18</span></div>
+          <div class="exp-row"><span class="lbl"><span class="cls-dot" style="background:var(--cls-2)"></span> Internal</span>
+            <div class="bar"><div class="fill" style="width:55%;background:var(--cls-2)"></div></div><span class="n">12</span></div>
+          <div class="exp-row"><span class="lbl"><span class="cls-dot" style="background:var(--cls-3)"></span> Confidential</span>
+            <div class="bar"><div class="fill" style="width:40%;background:var(--cls-3)"></div></div><span class="n">7</span></div>
+          <div class="exp-row"><span class="lbl"><span class="cls-dot" style="background:var(--cls-4)"></span> Restricted</span>
+            <div class="bar"><div class="fill" style="width:25%;background:var(--cls-4)"></div></div><span class="n">5</span></div>
+        </div>
+        <p style="color:var(--muted);font-size:12px;margin:14px 0 0">9 of 12 Confidential/Restricted fields are reachable by at least one human user. Investigate the top paths below.</p>
+      </div>
+
+      <div class="panel">
+        <h2>Top exposure paths <span class="badge">root → … → human user</span></h2>
+        <div class="path">
+          <div class="chain">
+            <span class="node mono">SSN&nbsp;<span class="cls-dot" style="background:var(--cls-4);display:inline-block;width:7px;height:7px;border-radius:2px;vertical-align:middle"></span></span>
+            <span class="arr">←</span><span class="node">Customer.cust</span><span class="arr">←</span>
+            <span class="node">api /customers</span><span class="arr">←</span><span class="node">CRM UI</span><span class="arr">←</span>
+            <span class="node">analyst@acme</span>
+          </div>
+          <span class="status crit"><span class="ic"></span>4 hops</span>
+        </div>
+        <div class="path">
+          <div class="chain">
+            <span class="node mono">CreditCard</span><span class="arr">←</span><span class="node">Billing.card</span>
+            <span class="arr">←</span><span class="node">api /pay</span><span class="arr">←</span><span class="node">svc-account</span><span class="arr">←</span>
+            <span class="node">dbuser billing</span>
+          </div>
+          <span class="status warn"><span class="ic"></span>4 hops</span>
+        </div>
+        <div class="path">
+          <div class="chain">
+            <span class="node mono">Email</span><span class="arr">←</span><span class="node">Mktg.list</span>
+            <span class="arr">←</span><span class="node">api /leads</span><span class="arr">←</span><span class="node">Campaigns UI</span>
+          </div>
+          <span class="status warn"><span class="ic"></span>3 hops</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Graph node + edge mock (SSN trace) -->
+    <div class="panel" style="margin-top:14px">
+      <h2>Twin graph — node &amp; edge styling <span class="badge">classification stripe · capability badges · category chip · solid access / dashed contains · aqua reachability highlight</span></h2>
+      <div class="graph-stage">
+        <svg viewBox="0 0 760 230" aria-label="graph mock">
+          <defs>
+            <marker id="ah" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--ink-2)"/></marker>
+            <marker id="ahr" markerWidth="9" markerHeight="9" refX="8" refY="3.2" orient="auto"><path d="M0,0 L8,3.2 L0,6.4 z" fill="var(--reach)"/></marker>
+            <path id="e1" d="M150,150 C260,150 300,70 410,70" fill="none"/>
+            <path id="e2" d="M460,150 C560,150 600,70 690,70" fill="none"/>
+          </defs>
+
+          <!-- edge: access (solid) + reachability packet -->
+          <path d="M150,150 C260,150 300,70 410,70" stroke="var(--reach)" stroke-width="2.6" fill="none" marker-end="url(#ahr)"/>
+          <circle class="packet" style="offset-path:path('M150,150 C260,150 300,70 410,70');animation:flow 2.4s linear infinite"/>
+          <text x="280" y="118" fill="var(--reach)" font-size="11">accesses ←</text>
+
+          <!-- edge: contains (dashed) -->
+          <path d="M460,150 C560,150 600,70 690,70" stroke="var(--ink-2)" stroke-width="1.6" fill="none" stroke-dasharray="5 4" marker-end="url(#ah)"/>
+          <text x="565" y="118" fill="var(--muted)" font-size="11">contains</text>
+
+          <!-- nodes: card with left stripe -->
+          <!-- analyst@acme (User) -->
+          <g transform="translate(40,128)">
+            <rect x="0" y="0" width="112" height="48" rx="9" fill="var(--surface-2)" stroke="var(--border)"/>
+            <rect x="0" y="0" width="5" height="48" rx="3" fill="var(--cls-1)"/>
+            <text x="14" y="20" fill="var(--ink)" font-size="12" font-weight="600">analyst@acme</text>
+            <text x="14" y="36" fill="var(--muted)" font-size="10">User</text>
+          </g>
+          <!-- api /customers -->
+          <g transform="translate(410,50)">
+            <rect x="0" y="0" width="118" height="48" rx="9" fill="var(--surface-2)" stroke="var(--border)"/>
+            <rect x="0" y="0" width="5" height="48" rx="3" fill="var(--cls-2)"/>
+            <text x="14" y="20" fill="var(--ink)" font-size="12" font-weight="600">api /customers</text>
+            <text x="14" y="36" fill="var(--muted)" font-size="10">ApiEndpoint</text>
+          </g>
+          <!-- Customer.cust (Column, Restricted) -->
+          <g transform="translate(690,50)">
+            <rect x="0" y="0" width="64" height="58" rx="9" fill="var(--surface-2)" stroke="var(--border)"/>
+            <rect x="0" y="0" width="5" height="58" rx="3" fill="var(--cls-4)"/>
+            <text x="14" y="20" fill="var(--ink)" font-size="12" font-weight="600">SSN</text>
+            <text x="14" y="34" fill="var(--muted)" font-size="10">Column</text>
+            <rect x="14" y="40" width="34" height="12" rx="4" fill="none" stroke="var(--border)"/>
+            <text x="19" y="49" fill="var(--ink-2)" font-size="8">🔒 MASK</text>
+          </g>
+          <text x="40" y="120" fill="var(--muted)" font-size="10">root (data-to-user)</text>
+          <text x="700" y="120" fill="var(--muted)" font-size="10">reached</text>
+        </svg>
+      </div>
+    </div>
+
+    <!-- Table sample -->
+    <div class="panel" style="margin-top:14px">
+      <h2>Tables — objects of Type <span class="badge">columns = summary fields · classification dot + category chip</span></h2>
+      <table class="twin">
+        <thead><tr><th>Field</th><th>Type</th><th>Classification</th><th>Category</th><th>Capabilities</th><th>Reached by</th></tr></thead>
+        <tbody>
+          <tr><td class="mono">ssn</td><td>Column</td>
+            <td><span class="cls-cell"><span class="cls-dot" style="background:var(--cls-4)"></span> Restricted</span></td>
+            <td><span class="cat-chip">🆔 SSN</span></td>
+            <td><span class="cap-badge">🔒 MASK</span> <span class="cap-badge">🔑 ENC</span></td>
+            <td><span class="status crit"><span class="ic"></span>2 users</span></td></tr>
+          <tr><td class="mono">email</td><td>Column</td>
+            <td><span class="cls-cell"><span class="cls-dot" style="background:var(--cls-3)"></span> Confidential</span></td>
+            <td><span class="cat-chip">✉ Email</span></td>
+            <td><span class="cap-badge">🔑 ENC</span></td>
+            <td><span class="status warn"><span class="ic"></span>1 user</span></td></tr>
+          <tr><td class="mono">created_at</td><td>Column</td>
+            <td><span class="cls-cell"><span class="cls-dot" style="background:var(--cls-1)"></span> Public</span></td>
+            <td><span class="cat-chip">— none</span></td>
+            <td><span class="cap-badge">📝 AUDIT</span></td>
+            <td><span style="color:var(--muted)">—</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Legend -->
+    <div class="legend">
+      <div class="panel">
+        <h2>Color system</h2>
+        <div class="leg-row"><span class="cls-dot" style="background:var(--cls-1)"></span> Public <span class="keys">#86b6ef / #6da7ec</span></div>
+        <div class="leg-row"><span class="cls-dot" style="background:var(--cls-2)"></span> Internal <span class="keys">#3987e5</span></div>
+        <div class="leg-row"><span class="cls-dot" style="background:var(--cls-3)"></span> Confidential <span class="keys">#1c5cab / #256abf</span></div>
+        <div class="leg-row"><span class="cls-dot" style="background:var(--cls-4)"></span> Restricted <span class="keys">#0d366b / #184f95</span></div>
+        <div class="leg-row"><span style="width:10px;height:10px;border-radius:3px;background:var(--reach)"></span> Reachability highlight <span class="keys">aqua · packet</span></div>
+        <div class="leg-row"><span style="width:10px;height:10px;border-radius:3px;background:var(--brand)"></span> Brand / primary action <span class="keys">violet</span></div>
+        <div class="leg-row"><span class="status good"><span class="ic"></span></span> good · <span class="status warn"><span class="ic"></span></span> warning · <span class="status crit"><span class="ic"></span></span> critical <span class="keys">reserved · state only</span></div>
+      </div>
+      <div class="panel">
+        <h2>Marks &amp; typography</h2>
+        <div class="leg-row"><span class="cat-chip">🆔 SSN</span> Data-category chip — neutral, icon+label (NOT hue-encoded)</div>
+        <div class="leg-row"><span class="cap-badge">🔒 MASK</span> <span class="cap-badge">🔑 ENC</span> Capability badge — muted, outlined</div>
+        <div class="leg-row"><span style="display:inline-block;width:34px;border-top:2px solid var(--ink-2)"></span> solid = access relation</div>
+        <div class="leg-row"><span style="display:inline-block;width:34px;border-top:2px dashed var(--ink-2)"></span> dashed = contains relation</div>
+        <div class="leg-row">System sans UI · <span class="mono">mono IDs/keys</span> · <span class="tnum">tabular nums</span> in numeric columns</div>
+        <div class="leg-row">No filter/blur/shadow on nodes (perf) · labels on hover/highlight at scale</div>
+      </div>
+    </div>
+
+  </main>
+
+  <div class="note">PROTOTYPE — throwaway. Ticket 05 visual direction. Dark default; toggle below. Open the SSN demo twin to see the live graph.</div>
+  <div class="toggle">
+    <button id="b-dark" class="on">Dark</button>
+    <button id="b-light">Light</button>
+  </div>
+
+<script>
+  const root=document.documentElement;
+  function setTheme(t){root.dataset.theme=t;
+    document.getElementById('b-dark').classList.toggle('on',t==='dark');
+    document.getElementById('b-light').classList.toggle('on',t==='light');}
+  document.getElementById('b-dark').onclick=()=>setTheme('dark');
+  document.getElementById('b-light').onclick=()=>setTheme('light');
+</script>
+</body>
+</html>

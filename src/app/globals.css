@@ -1,0 +1,224 @@
+@import '@xyflow/react/dist/style.css';
+@import 'antd/dist/reset.css';
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  font-family:
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    sans-serif;
+  background: var(--twin-bg, #0e1014);
+  color: var(--twin-text, #e5e7eb);
+  height: 100%;
+}
+
+body {
+  min-height: 100vh;
+}
+
+#__next,
+.ant-layout,
+.ant-layout-content {
+  height: 100%;
+}
+
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+.mono {
+  font-family: ui-monospace, SF Mono, Menlo, Consolas, monospace;
+  font-size: 0.85em;
+}
+
+.twin-app {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.twin-app__body {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
+.twin-app__main {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+  background: var(--twin-bg);
+}
+
+.twin-sider {
+  background: var(--twin-surface);
+  border-right: 1px solid var(--twin-border);
+}
+
+.twin-header {
+  background: var(--twin-surface);
+  border-bottom: 1px solid var(--twin-border);
+  display: flex;
+  align-items: center;
+  padding: 0 16px;
+  gap: 12px;
+  height: 56px;
+}
+
+.twin-header__title {
+  font-weight: 600;
+  font-size: 16px;
+  letter-spacing: 0.2px;
+}
+
+.twin-header__spacer {
+  flex: 1;
+}
+
+/* React Flow custom-node theming */
+.twin-node {
+  background: var(--twin-node-bg, #1a1f2a);
+  border: 1px solid var(--twin-border, #2a2f3a);
+  border-radius: 8px;
+  padding: 8px 10px 8px 14px;
+  min-width: 160px;
+  position: relative;
+  color: var(--twin-text, #e5e7eb);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.twin-node__stripe {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 6px;
+  border-top-left-radius: 8px;
+  border-bottom-left-radius: 8px;
+  background: var(--twin-stripe, transparent);
+}
+
+.twin-node__type {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--twin-text-muted, #9ca3af);
+}
+
+.twin-node__label {
+  font-weight: 600;
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.twin-node__badges {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+  margin-top: 2px;
+}
+
+.twin-badge {
+  font-size: 10px;
+  padding: 1px 6px;
+  border: 1px solid var(--twin-border, #2a2f3a);
+  border-radius: 999px;
+  color: var(--twin-text-muted, #9ca3af);
+  background: transparent;
+  font-weight: 500;
+}
+
+.twin-node--root {
+  outline: 2px solid var(--twin-reachability, #1baf7a);
+  outline-offset: 2px;
+}
+
+.twin-node--reachable {
+  border-color: var(--twin-reachability, #1baf7a);
+}
+
+.twin-node--unreachable {
+  opacity: 0.14;
+}
+
+.twin-edge--highlight {
+  stroke: var(--twin-reachability, #1baf7a) !important;
+  stroke-width: 2.5 !important;
+}
+
+.twin-edge--dim {
+  opacity: 0.14;
+}
+
+.react-flow__edge-path {
+  stroke: var(--twin-edge, #475569);
+  stroke-width: 1.5;
+}
+
+.react-flow__edge.dashed .react-flow__edge-path {
+  stroke-dasharray: 4 4;
+  stroke: var(--twin-edge-dashed, #334155);
+}
+
+.react-flow__handle {
+  background: var(--twin-edge, #475569);
+  width: 8px;
+  height: 8px;
+}
+
+.twin-canvas {
+  height: 100%;
+  background: var(--twin-bg);
+}
+
+/* Dashboard stat tiles */
+.twin-stat {
+  background: var(--twin-surface);
+  border: 1px solid var(--twin-border);
+  border-radius: 10px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.twin-stat__label {
+  font-size: 12px;
+  color: var(--twin-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.twin-stat__value {
+  font-size: 24px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Tables */
+.twin-table-wrap {
+  padding: 24px;
+  max-width: 1280px;
+  margin: 0 auto;
+}
+
+.twin-page {
+  padding: 24px;
+  max-width: 1280px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
