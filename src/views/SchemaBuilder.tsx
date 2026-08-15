@@ -2,9 +2,24 @@
 
 import { useState } from 'react';
 import { Card, Form, Input, Select, Switch, Tabs, Empty, Button, Space, Modal, Tag, message } from 'antd';
-import { PlusOutlined, DeleteOutlined } from '@ant-design/icons';
+import { PlusOutlined, DeleteOutlined, HolderOutlined } from '@ant-design/icons';
+import {
+  DndContext,
+  PointerSensor,
+  closestCenter,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from '@dnd-kit/core';
+import {
+  SortableContext,
+  useSortable,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import { useTwinStore } from '@/state/twinStore';
 import { detectRepairConflicts } from '@/domain/migrate';
+import { reorderFields, reorderSections } from '@/domain/schemaOps';
 import type { FieldDef, SectionDef, TypeDef } from '@/domain/types';
 import { useAutosave } from '@/shell/useAutosave';
 
@@ -33,6 +48,53 @@ export function SchemaBuilder() {
 
   const updateType = (next: TypeDef) => {
     updateSchema({ ...doc.schema, types: doc.schema.types.map((t) => (t.id === next.id ? next : t)) });
+  };
+
+  // @dnd-kit sensors: small activation distance so click-to-edit inputs aren't grabbed.
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
+
+  // Drag-and-drop reordering. Item ids are the raw SectionDef.id / FieldDef.id —
+  // the helpers in domain/schemaOps use the same ids to locate indices. We
+  // distinguish section vs field moves by checking which list contains each id.
+  const onDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id || !type) return;
+    const activeId = String(active.id);
+    const overId = String(over.id);
+
+    const sectionIndexById = new Map(type.sections.map((s, i) => [s.id, i]));
+    const fieldIndexById = new Map<string, { section: SectionDef; index: number }>();
+    type.sections.forEach((sec) =>
+      sec.fields.forEach((f, i) => fieldIndexById.set(f.id, { section: sec, index: i })),
+    );
+
+    const activeSecIdx = sectionIndexById.get(activeId);
+    const overSecIdx = sectionIndexById.get(overId);
+    if (activeSecIdx != null && overSecIdx != null) {
+      const next = reorderSections(doc.schema, type.id, activeSecIdx, overSecIdx);
+      if (next !== doc.schema) updateSchema(next);
+      return;
+    }
+
+    const activeField = fieldIndexById.get(activeId);
+    const overField = fieldIndexById.get(overId);
+    if (activeField && overField) {
+      if (activeField.section.id !== overField.section.id) {
+        // Cross-section field drops are out of scope for v1 (would require a
+        // destructive-evolution review). Tell the user rather than silently failing.
+        message.warning('Moving a field across sections is not supported yet.');
+        return;
+      }
+      const next = reorderFields(
+        doc.schema,
+        type.id,
+        activeField.section.id,
+        activeField.index,
+        overField.index,
+      );
+      if (next !== doc.schema) updateSchema(next);
+      return;
+    }
   };
 
   const addSection = () => {
@@ -161,96 +223,24 @@ export function SchemaBuilder() {
                         </Button>
                       }
                     >
-                      {type.sections.map((sec) => (
-                        <div
-                          key={sec.id}
-                          style={{
-                            border: '1px solid var(--twin-border)',
-                            borderRadius: 6,
-                            padding: 12,
-                            marginBottom: 12,
-                          }}
+                      <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
+                        <SortableContext
+                          items={type.sections.map((s) => s.id)}
+                          strategy={verticalListSortingStrategy}
                         >
-                          <Space style={{ marginBottom: 8, width: '100%' }} align="center">
-                            <Input
-                              value={sec.name}
-                              onChange={(e) => updateSection(sec, { name: e.target.value })}
-                              style={{ width: 220 }}
+                          {type.sections.map((sec) => (
+                            <SortableSection
+                              key={sec.id}
+                              sec={sec}
+                              onRename={(name) => updateSection(sec, { name })}
+                              onRemove={() => removeSection(sec)}
+                              onAddField={() => addField(sec)}
+                              updateField={(f, patch) => updateField(sec, f, patch)}
+                              removeField={(f) => removeField(sec, f)}
                             />
-                            <Button
-                              size="small"
-                              type="text"
-                              danger
-                              icon={<DeleteOutlined />}
-                              onClick={() => removeSection(sec)}
-                            />
-                            <span style={{ flex: 1 }} />
-                            <Button size="small" onClick={() => addField(sec)}>
-                              + Field
-                            </Button>
-                          </Space>
-                          {sec.fields.map((f) => (
-                            <div
-                              key={f.id}
-                              style={{
-                                display: 'grid',
-                                gridTemplateColumns: '1fr 1fr 110px 80px 80px 32px',
-                                gap: 8,
-                                alignItems: 'center',
-                                marginBottom: 6,
-                              }}
-                            >
-                              <Input
-                                value={f.name}
-                                onChange={(e) => updateField(sec, f, { name: e.target.value })}
-                                size="small"
-                              />
-                              <Input
-                                value={f.id}
-                                onChange={(e) => updateField(sec, f, { id: e.target.value })}
-                                size="small"
-                                className="mono"
-                              />
-                              <Select
-                                size="small"
-                                value={f.type}
-                                onChange={(t) => updateField(sec, f, { type: t })}
-                                options={[
-                                  { value: 'text', label: 'text' },
-                                  { value: 'enum', label: 'enum' },
-                                  { value: 'multi-tag', label: 'multi-tag' },
-                                  { value: 'boolean', label: 'boolean' },
-                                  { value: 'number', label: 'number' },
-                                  { value: 'ref', label: 'ref' },
-                                ]}
-                              />
-                              <span style={{ fontSize: 12 }}>
-                                <Switch
-                                  size="small"
-                                  checked={!!f.summary}
-                                  onChange={(v) => updateField(sec, f, { summary: v })}
-                                />{' '}
-                                summary
-                              </span>
-                              <span style={{ fontSize: 12 }}>
-                                <Switch
-                                  size="small"
-                                  checked={!!f.required}
-                                  onChange={(v) => updateField(sec, f, { required: v })}
-                                />{' '}
-                                required
-                              </span>
-                              <Button
-                                type="text"
-                                size="small"
-                                danger
-                                icon={<DeleteOutlined />}
-                                onClick={() => removeField(sec, f)}
-                              />
-                            </div>
                           ))}
-                        </div>
-                      ))}
+                        </SortableContext>
+                      </DndContext>
                       {conflictByType.has(type.id) ? (
                         <Button
                           type="primary"
@@ -387,6 +377,142 @@ export function SchemaBuilder() {
             })()
           : null}
       </Modal>
+    </div>
+  );
+}
+
+// --- Sortable building blocks -----------------------------------------
+
+interface SortableSectionProps {
+  sec: SectionDef;
+  onRename: (name: string) => void;
+  onRemove: () => void;
+  onAddField: () => void;
+  updateField: (f: FieldDef, patch: Partial<FieldDef>) => void;
+  removeField: (f: FieldDef) => void;
+}
+
+function SortableSection({
+  sec,
+  onRename,
+  onRemove,
+  onAddField,
+  updateField,
+  removeField,
+}: SortableSectionProps) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: sec.id,
+  });
+  const style: React.CSSProperties = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.6 : 1,
+    border: '1px solid var(--twin-border)',
+    borderRadius: 6,
+    padding: 12,
+    marginBottom: 12,
+    background: 'var(--twin-surface)',
+  };
+
+  return (
+    <div ref={setNodeRef} style={style}>
+      <Space style={{ marginBottom: 8, width: '100%' }} align="center">
+        <Button
+          size="small"
+          type="text"
+          icon={<HolderOutlined />}
+          {...attributes}
+          {...listeners}
+          aria-label={`Reorder section ${sec.name}`}
+          style={{ cursor: 'grab' }}
+        />
+        <Input
+          value={sec.name}
+          onChange={(e) => onRename(e.target.value)}
+          style={{ width: 220 }}
+        />
+        <Button size="small" type="text" danger icon={<DeleteOutlined />} onClick={onRemove} />
+        <span style={{ flex: 1 }} />
+        <Button size="small" onClick={onAddField}>
+          + Field
+        </Button>
+      </Space>
+      <SortableContext
+        items={sec.fields.map((f) => f.id)}
+        strategy={verticalListSortingStrategy}
+      >
+        {sec.fields.map((f) => (
+          <SortableField
+            key={f.id}
+            f={f}
+            onPatch={(patch) => updateField(f, patch)}
+            onRemove={() => removeField(f)}
+          />
+        ))}
+      </SortableContext>
+    </div>
+  );
+}
+
+interface SortableFieldProps {
+  f: FieldDef;
+  onPatch: (patch: Partial<FieldDef>) => void;
+  onRemove: () => void;
+}
+
+function SortableField({ f, onPatch, onRemove }: SortableFieldProps) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: f.id,
+  });
+  const style: React.CSSProperties = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+    display: 'grid',
+    gridTemplateColumns: '24px 1fr 1fr 110px 80px 80px 32px',
+    gap: 8,
+    alignItems: 'center',
+    marginBottom: 6,
+    background: isDragging ? 'var(--twin-surface)' : 'transparent',
+  };
+
+  return (
+    <div ref={setNodeRef} style={style}>
+      <Button
+        size="small"
+        type="text"
+        icon={<HolderOutlined />}
+        {...attributes}
+        {...listeners}
+        aria-label={`Reorder field ${f.name}`}
+        style={{ cursor: 'grab' }}
+      />
+      <Input value={f.name} onChange={(e) => onPatch({ name: e.target.value })} size="small" />
+      {/* Field id is immutable post-creation: it's the stable key every object's
+          value is stored under. Renaming it would orphan every value silently. */}
+      <span className="mono" style={{ color: 'var(--twin-text-muted)', fontSize: 12, padding: '4px 8px' }}>
+        {f.id}
+      </span>
+      <Select
+        size="small"
+        value={f.type}
+        onChange={(t) => onPatch({ type: t as FieldDef['type'] })}
+        options={[
+          { value: 'text', label: 'text' },
+          { value: 'enum', label: 'enum' },
+          { value: 'multi-tag', label: 'multi-tag' },
+          { value: 'boolean', label: 'boolean' },
+          { value: 'number', label: 'number' },
+          { value: 'ref', label: 'ref' },
+        ]}
+      />
+      <span style={{ fontSize: 12 }}>
+        <Switch size="small" checked={!!f.summary} onChange={(v) => onPatch({ summary: v })} /> summary
+      </span>
+      <span style={{ fontSize: 12 }}>
+        <Switch size="small" checked={!!f.required} onChange={(v) => onPatch({ required: v })} /> required
+      </span>
+      <Button type="text" size="small" danger icon={<DeleteOutlined />} onClick={onRemove} />
     </div>
   );
 }
