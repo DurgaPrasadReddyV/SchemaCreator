@@ -26,7 +26,7 @@ import {
 import { useTwinStore } from '@/state/twinStore';
 import { useFlowStore } from '@/state/flowStore';
 import { useReachabilityStore } from '@/state/reachabilityStore';
-import { computeReachability, graphRevisionOf, isValidRoot } from '@/domain/reachability';
+import { computeReachabilityMemo, isValidRoot } from '@/domain/reachability';
 import { buildGraphFromTwin } from '@/graph/graphAdapter';
 import { TwinNode } from '@/graph/TwinNode';
 import { TwinEdge } from '@/graph/TwinEdge';
@@ -86,10 +86,11 @@ export function ReachabilityView() {
     return doc.objects.filter((o) => isValidRoot(o, mode));
   }, [doc, mode]);
 
-  // Run the query
+  // Run the query (memoized by graphRevision + root + mode — story 46)
   const runQuery = useCallback(() => {
     if (!doc || !rootId) return;
-    const r = computeReachability(
+    const r = computeReachabilityMemo(
+      graphRevision,
       { schema: doc.schema, objects: doc.objects, relations: doc.relations },
       rootId,
       mode,
@@ -97,12 +98,13 @@ export function ReachabilityView() {
     setResult(r);
     setReachable(r.reachableIds);
     setCurrentHop(0);
-  }, [doc, rootId, mode, setResult, setReachable, setCurrentHop]);
+  }, [doc, rootId, mode, graphRevision, setResult, setReachable, setCurrentHop]);
 
   // Auto-run on first mount if a root is already chosen
   useEffect(() => {
     if (doc && rootId) {
-      const r = computeReachability(
+      const r = computeReachabilityMemo(
+        graphRevision,
         { schema: doc.schema, objects: doc.objects, relations: doc.relations },
         rootId,
         mode,

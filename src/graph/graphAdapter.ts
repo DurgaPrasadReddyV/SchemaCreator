@@ -26,7 +26,7 @@ export function buildGraphFromTwin(doc: TwinDoc, layout: 'dagre' | 'manual' = 'd
     source: r.fromId,
     target: r.toId,
     type: 'twinEdge',
-    data: { relationTypeId: r.relationTypeId },
+    data: { relationTypeId: r.relationTypeId, relationId: r.id },
   }));
 
   if (layout === 'dagre' && !doc.graphLayout) {

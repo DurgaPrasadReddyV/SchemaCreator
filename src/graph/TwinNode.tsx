@@ -40,6 +40,11 @@ function TwinNodeImpl({ data, id }: NodeProps) {
   const rootId = useReachabilityStore((s) => s.rootId);
   const isRoot = rootId === id;
 
+  // Per-hop reveal: a node lights up only when its BFS hop has been reached
+  // by the animation scrubber. Nodes outside the reachable set stay dimmed.
+  const perHop = useReachabilityStore((s) => s.result?.perHopReachable);
+  const currentHop = useReachabilityStore((s) => s.currentHop);
+
   const obj = doc?.objects.find((o) => o.id === objectRefId);
   const type = doc?.schema.types.find((t) => t.id === obj?.typeId);
   const Icon = type ? getIcon(type.icon) : null;
@@ -50,10 +55,23 @@ function TwinNodeImpl({ data, id }: NodeProps) {
     (s) => s.reachableIds.size > 0 && !s.reachableIds.has(id),
   );
 
+  // The hop at which this node was reached (undefined if no result / not reached).
+  let nodeHop: number | undefined;
+  if (perHop) {
+    for (const [h, set] of perHop) {
+      if (set.has(id)) {
+        nodeHop = h;
+        break;
+      }
+    }
+  }
+  // Root is always at hop 0; with no result, reachable is false so this stays false.
+  const revealed = reachable && (nodeHop == null || nodeHop <= currentHop);
+
   const className = [
     'twin-node',
     isRoot ? 'twin-node--root' : '',
-    reachable ? 'twin-node--reachable' : '',
+    revealed ? 'twin-node--reachable' : '',
     dimmed ? 'twin-node--unreachable' : '',
   ]
     .filter(Boolean)

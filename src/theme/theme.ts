@@ -31,6 +31,15 @@ export const REACHABILITY = {
   dark: '#199e70',
 } as const;
 
+/** Flood accent — the contains-subtree reached via an `accesses` flood.
+ *  Distinct from aqua reachability and the blue classification ramp so a
+ *  flood edge reads as "lit because flooded," not "lit because reachable"
+ *  or "lit because sensitive." Amber. */
+export const FLOOD = {
+  light: '#d98a2b',
+  dark: '#e0a44a',
+} as const;
+
 export const BRAND = {
   light: '#4a3aa7',
   dark: '#9085e9',
@@ -57,6 +66,7 @@ export const CSS_VARS = {
   classificationConfidential: '--twin-classification-confidential',
   classificationRestricted: '--twin-classification-restricted',
   reachability: '--twin-reachability',
+  flood: '--twin-flood',
   brand: '--twin-brand',
 } as const;
 
@@ -106,6 +116,7 @@ export function cssVarValues(theme: 'light' | 'dark') {
     [CSS_VARS.classificationConfidential]: cls.confidential,
     [CSS_VARS.classificationRestricted]: cls.restricted,
     [CSS_VARS.reachability]: REACHABILITY[theme],
+    [CSS_VARS.flood]: FLOOD[theme],
     [CSS_VARS.brand]: BRAND[theme],
   } as Record<string, string>;
 }

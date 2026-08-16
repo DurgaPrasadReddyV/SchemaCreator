@@ -158,8 +158,26 @@ body {
   stroke-width: 2.5 !important;
 }
 
+/* Flood edge: a contains-subtree reached via an `accesses` flood.
+   Second accent color, distinct from aqua reachability + blue classification. */
+.twin-edge--flood {
+  stroke: var(--twin-flood, #e0a44a) !important;
+  stroke-width: 2.5 !important;
+}
+
 .twin-edge--dim {
   opacity: 0.14;
+}
+
+/* Reachability packet — SVG <animateMotion> circle flowing along an edge.
+   Gated per-edge by React (rendered only on revealed reachable edges), so no
+   CPU spent on stroke-dasharray marching ants at scale. */
+.twin-edge__packet {
+  fill: var(--twin-reachability, #1baf7a);
+  pointer-events: none;
+}
+.twin-edge__packet--flood {
+  fill: var(--twin-flood, #e0a44a);
 }
 
 .react-flow__edge-path {

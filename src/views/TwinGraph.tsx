@@ -99,7 +99,7 @@ export function TwinGraph() {
             source: newRel.fromId,
             target: newRel.toId,
             type: 'twinEdge',
-            data: { relationTypeId: newRel.relationTypeId },
+            data: { relationTypeId: newRel.relationTypeId, relationId: newRel.id },
           },
           eds,
         ),
