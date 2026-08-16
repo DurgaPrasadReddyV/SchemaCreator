@@ -4,7 +4,7 @@ import { Form, Input, InputNumber, Select, Switch, Empty, Tag, Space, Divider } 
 import { useTwinStore } from '@/state/twinStore';
 import { useFlowStore } from '@/state/flowStore';
 import { useMemo } from 'react';
-import type { Classification, FieldDef, TwinObject, TwinDoc, TypeDef } from '@/domain/types';
+import type { Classification, FieldDef, TwinObject, TwinRelation, TwinDoc, TypeDef } from '@/domain/types';
 import { useAutosave } from '@/shell/useAutosave';
 
 export function Inspector() {
@@ -12,25 +12,39 @@ export function Inspector() {
   const doc = useTwinStore((s) => s.doc);
   const patchDoc = useTwinStore((s) => s.patchDoc);
   const selectedId = useFlowStore((s) => s.selectedObjectId);
+  const selectedRelationId = useFlowStore((s) => s.selectedRelationId);
   const setReachable = useFlowStore((s) => s.setReachable);
   const setSelected = useFlowStore((s) => s.setSelectedObject);
+  const setSelectedRelation = useFlowStore((s) => s.setSelectedRelation);
 
-  const obj = useMemo(
-    () => doc?.objects.find((o) => o.id === selectedId) ?? null,
-    [doc, selectedId],
-  );
-  const type = useMemo<TypeDef | undefined>(
-    () => (obj ? doc?.schema.types.find((t) => t.id === obj.typeId) : undefined),
-    [doc, obj],
+  const rel = useMemo(
+    () => (selectedRelationId ? doc?.relations.find((r) => r.id === selectedRelationId) ?? null : null),
+    [doc, selectedRelationId],
   );
 
   if (!doc) return <div style={{ padding: 16 }}>No twin loaded</div>;
+
+  // Relation editor takes precedence when an edge is selected (story 13).
+  if (rel) {
+    return (
+      <RelationEditor
+        rel={rel}
+        doc={doc}
+        onBack={() => setSelectedRelation(null)}
+        onChange={(next) => patchDoc({ relations: doc.relations.map((r) => (r.id === next.id ? next : r)) })}
+      />
+    );
+  }
+
+  const obj = doc.objects.find((o) => o.id === selectedId) ?? null;
+  const type = obj ? doc.schema.types.find((t) => t.id === obj.typeId) : undefined;
+
   if (!obj || !type) {
     return (
       <div style={{ padding: 16 }}>
         <Empty
           image={Empty.PRESENTED_IMAGE_SIMPLE}
-          description="Select a node to edit"
+          description="Select a node or edge to edit"
         />
       </div>
     );
@@ -126,6 +140,84 @@ export function Inspector() {
           </div>
         ) : null}
       </Form>
+    </div>
+  );
+}
+
+/** Edge / relation editor (story 13): annotate a TwinRelation with capabilities. */
+function RelationEditor({
+  rel,
+  doc,
+  onBack,
+  onChange,
+}: {
+  rel: TwinRelation;
+  doc: TwinDoc;
+  onBack: () => void;
+  onChange: (next: TwinRelation) => void;
+}) {
+  const rt = doc.schema.relationTypes.find((r) => r.id === rel.relationTypeId);
+  const fromObj = doc.objects.find((o) => o.id === rel.fromId);
+  const toObj = doc.objects.find((o) => o.id === rel.toId);
+  const fromType = doc.schema.types.find((t) => t.id === fromObj?.typeId);
+  const toType = doc.schema.types.find((t) => t.id === toObj?.typeId);
+
+  return (
+    <div style={{ padding: 16 }}>
+      <div style={{ marginBottom: 8 }}>
+        <span style={{ color: 'var(--twin-text-muted)', fontSize: 11, textTransform: 'uppercase' }}>
+          Relation {rt?.name ?? rel.relationTypeId}
+        </span>
+        <div style={{ fontWeight: 600, fontSize: 16 }}>
+          {(fromObj?.values.name as string) ?? rel.fromId}
+          {' '}
+          <span style={{ color: 'var(--twin-text-muted)' }}>─{rt?.forwardLabel ?? 'relates'}→</span>
+          {' '}
+          {(toObj?.values.name as string) ?? rel.toId}
+        </div>
+        <div className="mono" style={{ color: 'var(--twin-text-muted)', fontSize: 11 }}>
+          {fromType?.name ?? '?'} → {toType?.name ?? '?'}
+        </div>
+        <button
+          onClick={onBack}
+          style={{
+            background: 'none',
+            border: 'none',
+            color: 'var(--twin-brand)',
+            cursor: 'pointer',
+            padding: 0,
+            fontSize: 12,
+            marginTop: 4,
+          }}
+        >
+          ← Back to object
+        </button>
+      </div>
+      <Divider style={{ margin: '12px 0' }} />
+      <div
+        style={{
+          fontWeight: 600,
+          fontSize: 12,
+          textTransform: 'uppercase',
+          color: 'var(--twin-text-muted)',
+          marginBottom: 6,
+        }}
+      >
+        Edge capabilities
+      </div>
+      <Select
+        mode="multiple"
+        style={{ width: '100%' }}
+        size="small"
+        value={rel.capabilities ?? []}
+        onChange={(caps: string[]) => onChange({ ...rel, capabilities: caps })}
+        options={doc.schema.capabilities.map((c) => ({ value: c.id, label: c.name }))}
+        placeholder="Add capabilities that protect this link"
+      />
+      <p style={{ fontSize: 11, color: 'var(--twin-text-muted)', marginTop: 8 }}>
+        Capabilities on a relation describe protection applied to the data path itself
+        (e.g. TLS on a connection), independent of either endpoint.
+      </p>
     </div>
   );
 }

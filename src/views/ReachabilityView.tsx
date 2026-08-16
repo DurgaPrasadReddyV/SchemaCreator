@@ -54,6 +54,7 @@ export function ReachabilityView() {
   const setReachable = useFlowStore((s) => s.setReachable);
   const setSelected = useFlowStore((s) => s.setSelectedObject);
   const selectedId = useFlowStore((s) => s.selectedObjectId);
+  const setSelectedRelation = useFlowStore((s) => s.setSelectedRelation);
 
   const { nodes: initialNodes, edges: initialEdges } = useMemo(
     () => (doc ? buildGraphFromTwin(doc, 'manual') : { nodes: [], edges: [] }),
@@ -177,8 +178,21 @@ export function ReachabilityView() {
           onEdgesChange={onEdgesChange}
           nodeTypes={nodeTypes}
           edgeTypes={edgeTypes}
-          onNodeClick={(_, n) => setSelected(n.id)}
-          onPaneClick={() => setSelected(null)}
+          onNodeClick={(_, n) => {
+            setSelectedRelation(null);
+            setSelected(n.id);
+          }}
+          onEdgeClick={(_, e) => {
+            const relationId = (e.data as { relationId?: string } | undefined)?.relationId;
+            if (relationId) {
+              setSelected(null);
+              setSelectedRelation(relationId);
+            }
+          }}
+          onPaneClick={() => {
+            setSelected(null);
+            setSelectedRelation(null);
+          }}
           fitView
           proOptions={{ hideAttribution: true }}
         >

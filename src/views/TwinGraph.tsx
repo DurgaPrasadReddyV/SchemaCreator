@@ -39,6 +39,7 @@ export function TwinGraph() {
   const patchDoc = useTwinStore((s) => s.patchDoc);
   const selectedId = useFlowStore((s) => s.selectedObjectId);
   const setSelected = useFlowStore((s) => s.setSelectedObject);
+  const setSelectedRelation = useFlowStore((s) => s.setSelectedRelation);
 
   const { nodes: initialNodes, edges: initialEdges } = useMemo(
     () => (doc ? buildGraphFromTwin(doc) : { nodes: [], edges: [] }),
@@ -130,14 +131,27 @@ export function TwinGraph() {
 
   const handleNodeClick = useCallback(
     (_: unknown, node: Node) => {
+      setSelectedRelation(null);
       setSelected(node.id);
     },
-    [setSelected],
+    [setSelected, setSelectedRelation],
+  );
+
+  const handleEdgeClick = useCallback(
+    (_: unknown, edge: Edge) => {
+      const relationId = (edge.data as { relationId?: string } | undefined)?.relationId;
+      if (relationId) {
+        setSelected(null);
+        setSelectedRelation(relationId);
+      }
+    },
+    [setSelected, setSelectedRelation],
   );
 
   const handlePaneClick = useCallback(() => {
     setSelected(null);
-  }, [setSelected]);
+    setSelectedRelation(null);
+  }, [setSelected, setSelectedRelation]);
 
   const autoLayout = useCallback(() => {
     setNodes((nds) => {
@@ -179,6 +193,7 @@ export function TwinGraph() {
           onEdgesChange={onEdgesChange}
           onConnect={onConnect}
           onNodeClick={handleNodeClick}
+          onEdgeClick={handleEdgeClick}
           onPaneClick={handlePaneClick}
           onNodeDragStop={onNodeDragStop}
           nodeTypes={nodeTypes}

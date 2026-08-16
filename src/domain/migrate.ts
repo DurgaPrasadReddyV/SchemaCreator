@@ -253,6 +253,49 @@ export function detectRepairConflicts(
   return out;
 }
 
+/**
+ * Resolve the repair conflicts for a single Type by discarding the offending
+ * values: orphaned field ids are deleted, and values invalid for the current
+ * field type are cleared. Only objects of `typeId` are touched; every other
+ * object and every non-conflicting value is preserved.
+ *
+ * This is the user-triggered "discard" action — `detectRepairConflicts` lists
+ * the conflicts and nothing is discarded until this runs.
+ */
+export function resolveRepairConflicts(
+  schema: TwinSchema,
+  objects: TwinObject[],
+  typeId: string,
+): TwinObject[] {
+  const type = schema.types.find((t) => t.id === typeId);
+  if (!type) return objects;
+
+  const fieldById = new Map<string, FieldDef>();
+  const fieldIds = new Set<string>();
+  for (const sec of type.sections) {
+    for (const f of sec.fields) {
+      fieldById.set(f.id, f);
+      fieldIds.add(f.id);
+    }
+  }
+
+  return objects.map((o) => {
+    if (o.typeId !== typeId) return o;
+    const next: Record<string, unknown> = {};
+    for (const [fid, val] of Object.entries(o.values ?? {})) {
+      if (fid === NAME_FIELD_ID) {
+        next[fid] = val; // identity key is always kept
+        continue;
+      }
+      if (!fieldIds.has(fid)) continue; // orphaned → drop
+      const f = fieldById.get(fid);
+      if (f && !isTypeCompatible(f, val)) continue; // invalid → drop
+      next[fid] = val; // keep
+    }
+    return { ...o, values: next };
+  });
+}
+
 // --- Export / import round-trip -----------------------------------------
 
 /**
