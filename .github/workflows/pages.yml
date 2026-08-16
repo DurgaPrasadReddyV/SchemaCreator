@@ -1,0 +1,68 @@
+# Deploy the static export to GitHub Pages.
+#
+# On every push to main (and on manual dispatch), build the app with the
+# GitHub Pages base path, then publish the resulting `out/` directory.
+# The Pages deployment itself is performed by `actions/deploy-pages` into
+# the `github-pages` environment; declaring the environment is what
+# enables GitHub Pages for the repository on first run.
+
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Cancel an in-flight deploy when a new commit lands so the workflow does
+# not pile up on rapid pushes.
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+jobs:
+  build:
+    name: Build static export
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build for GitHub Pages
+        # GITHUB_PAGES=1 flips on basePath + assetPrefix in next.config.js
+        # so assets resolve under /SchemaCreator/.
+        run: npm run build
+        env:
+          GITHUB_PAGES: 1
+
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: out
+
+  deploy:
+    name: Deploy to GitHub Pages
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
