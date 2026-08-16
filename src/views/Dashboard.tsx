@@ -6,6 +6,8 @@ import { useRouter } from 'next/navigation';
 import { useTwinStore } from '@/state/twinStore';
 import { useUiStore } from '@/state/uiStore';
 import { computeReachability, graphRevisionOf } from '@/domain/reachability';
+import { classificationVar } from '@/theme/theme';
+import type { Classification } from '@/domain/types';
 import { useEffect, useState } from 'react';
 
 const { Title, Paragraph } = Typography;
@@ -76,10 +78,29 @@ export function Dashboard() {
 
   const totalObjects = doc.objects.length;
   const totalRelations = doc.relations.length;
-  const sensitiveFields = doc.objects.filter(
-    (o) => o.typeId === 'type.column' && (o.values.classification === 'restricted' || (o.dataCategory?.length ?? 0) > 0),
-  ).length;
   const totalUsers = doc.objects.filter((o) => o.typeId === 'type.user').length;
+
+  // Per-classification exposure: how many sensitive columns sit in each tier
+  // (story 69). A column counts if it has a classification or a data-category tag.
+  const sensitiveColumns = doc.objects.filter(
+    (o) => o.typeId === 'type.column' && (o.values.classification || (o.dataCategory?.length ?? 0) > 0),
+  );
+  const byClassification = useMemo(() => {
+    const tiers: { tier: Classification; count: number }[] = [
+      { tier: 'public', count: 0 },
+      { tier: 'internal', count: 0 },
+      { tier: 'confidential', count: 0 },
+      { tier: 'restricted', count: 0 },
+    ];
+    let unclassified = 0;
+    for (const c of sensitiveColumns) {
+      const cls = c.values.classification as Classification | undefined;
+      const t = tiers.find((x) => x.tier === cls);
+      if (t) t.count++;
+      else unclassified++;
+    }
+    return { tiers, unclassified, total: sensitiveColumns.length };
+  }, [sensitiveColumns]);
 
   return (
     <div className="twin-page">
@@ -117,31 +138,74 @@ export function Dashboard() {
       ) : (
         <>
           <Row gutter={16}>
-            <Col span={6}>
+            <Col span={8}>
               <div className="twin-stat">
                 <span className="twin-stat__label">Objects</span>
                 <span className="twin-stat__value tabular">{totalObjects}</span>
               </div>
             </Col>
-            <Col span={6}>
+            <Col span={8}>
               <div className="twin-stat">
                 <span className="twin-stat__label">Relations</span>
                 <span className="twin-stat__value tabular">{totalRelations}</span>
               </div>
             </Col>
-            <Col span={6}>
-              <div className="twin-stat">
-                <span className="twin-stat__label">Sensitive fields</span>
-                <span className="twin-stat__value tabular">{sensitiveFields}</span>
-              </div>
-            </Col>
-            <Col span={6}>
+            <Col span={8}>
               <div className="twin-stat">
                 <span className="twin-stat__label">Users</span>
                 <span className="twin-stat__value tabular">{totalUsers}</span>
               </div>
             </Col>
           </Row>
+
+          <Card title="Exposure by classification" size="small" style={{ marginTop: 16 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+              {/* Proportional bar: each tier's width is its share of sensitive columns. */}
+              <div style={{ flex: 1, minWidth: 240, height: 22, display: 'flex', borderRadius: 4, overflow: 'hidden', border: '1px solid var(--twin-border)' }}>
+                {byClassification.total === 0 ? (
+                  <div style={{ flex: 1, background: 'var(--twin-surface)' }} />
+                ) : (
+                  byClassification.tiers
+                    .filter((t) => t.count > 0)
+                    .map((t) => (
+                      <Tooltip key={t.tier} title={`${t.tier}: ${t.count}`}>
+                        <div
+                          style={{
+                            width: `${(t.count / byClassification.total) * 100}%`,
+                            background: classificationVar(t.tier),
+                          }}
+                        />
+                      </Tooltip>
+                    ))
+                )}
+              </div>
+              <Space wrap>
+                {byClassification.tiers.map((t) => (
+                  <Tag key={t.tier} style={{ marginInlineEnd: 0 }}>
+                    <span
+                      style={{
+                        display: 'inline-block',
+                        width: 8,
+                        height: 8,
+                        borderRadius: 2,
+                        background: classificationVar(t.tier),
+                        marginInlineEnd: 6,
+                      }}
+                    />
+                    <span className="tabular">{t.count}</span> {t.tier}
+                  </Tag>
+                ))}
+                {byClassification.unclassified > 0 ? (
+                  <Tag style={{ marginInlineEnd: 0 }}>
+                    <span className="tabular">{byClassification.unclassified}</span> unclassified
+                  </Tag>
+                ) : null}
+              </Space>
+            </div>
+            <div style={{ color: 'var(--twin-text-muted)', fontSize: 12, marginTop: 8 }}>
+              {byClassification.total} sensitive column{byClassification.total === 1 ? '' : 's'} (classified or data-category tagged).
+            </div>
+          </Card>
 
           <Card title="Top exposure paths" size="small">
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
@@ -171,7 +235,7 @@ export function Dashboard() {
                       {p.rootName}
                     </td>
                     <td style={{ padding: '8px 4px' }}>
-                      <Tag color={severityColor(p.classification)}>{p.classification}</Tag>
+                      <Tag color={statusColor(p.classification)}>{p.classification}</Tag>
                     </td>
                     <td style={{ padding: '8px 4px' }} className="tabular">
                       {p.reachableUsers}
@@ -265,15 +329,20 @@ export function Dashboard() {
   );
 }
 
-function severityColor(cls: string): string {
+/** Map a classification tier to a status-palette CSS variable (story 77).
+ *  Status vars are reserved for state/severity, which is exactly how the
+ *  exposure table uses classification here. */
+function statusColor(cls: string): string {
   switch (cls) {
     case 'restricted':
-      return 'red';
+      return 'var(--twin-status-critical)';
     case 'confidential':
-      return 'orange';
+      return 'var(--twin-status-serious)';
     case 'internal':
-      return 'blue';
+      return 'var(--twin-status-warning)';
+    case 'public':
+      return 'var(--twin-status-good)';
     default:
-      return 'default';
+      return 'var(--twin-text-muted)';
   }
 }

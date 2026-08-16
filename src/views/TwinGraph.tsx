@@ -25,7 +25,7 @@ import { useTwinStore } from '@/state/twinStore';
 import { useFlowStore } from '@/state/flowStore';
 import { TwinNode } from '@/graph/TwinNode';
 import { TwinEdge } from '@/graph/TwinEdge';
-import { applyDagreLayout, buildGraphFromTwin } from '@/graph/graphAdapter';
+import { applyDagreLayout, applyElkLayout, buildGraphFromTwin } from '@/graph/graphAdapter';
 import { Inspector } from '@/views/Inspector';
 import { useAutosave } from '@/shell/useAutosave';
 
@@ -153,13 +153,23 @@ export function TwinGraph() {
     setSelectedRelation(null);
   }, [setSelected, setSelectedRelation]);
 
-  const autoLayout = useCallback(() => {
-    setNodes((nds) => {
-      const next = [...nds];
-      applyDagreLayout(next, edges);
-      return next;
-    });
-  }, [edges, setNodes]);
+  // Auto-layout: ELK layered for dense graphs (>40 nodes), Dagre otherwise.
+  // ELK is dynamically imported so its (large) bundle only loads when needed.
+  const [layingOut, setLayingOut] = useState(false);
+  const autoLayout = useCallback(async () => {
+    setLayingOut(true);
+    try {
+      const next = [...nodes];
+      if (next.length > 40) {
+        await applyElkLayout(next, edges);
+      } else {
+        applyDagreLayout(next, edges);
+      }
+      setNodes(next);
+    } finally {
+      setLayingOut(false);
+    }
+  }, [nodes, edges, setNodes]);
 
   const addObject = (values: { typeId: string; name: string }) => {
     if (!doc) return;
@@ -213,7 +223,7 @@ export function TwinGraph() {
               >
                 Add object
               </Button>
-              <Button icon={<PartitionOutlined />} onClick={autoLayout}>
+              <Button icon={<PartitionOutlined />} onClick={() => void autoLayout()} loading={layingOut}>
                 Auto-layout
               </Button>
             </Space>

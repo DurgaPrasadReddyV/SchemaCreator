@@ -1,13 +1,14 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Button, Dropdown, Modal, Space, Switch, Tooltip, message, Drawer, Form, Input } from 'antd';
-import { AppstoreOutlined, ExportOutlined, ImportOutlined, SettingOutlined } from '@ant-design/icons';
+import { Button, Dropdown, Modal, Space, Switch, Tooltip, message, Drawer, Form, Input, Upload, Tag } from 'antd';
+import { AppstoreOutlined, ExportOutlined, ImportOutlined, SettingOutlined, InboxOutlined } from '@ant-design/icons';
 import { useRouter } from 'next/navigation';
 import { useTwinStore } from '@/state/twinStore';
 import { useUiStore } from '@/state/uiStore';
 import { useReachabilityStore } from '@/state/reachabilityStore';
 import { exportTwinJson, importTwinJson } from '@/domain/migrate';
+import type { TwinDoc } from '@/domain/types';
 import { getDb, setKv, getKv, putTwin } from '@/state/db';
 import { buildAcmeDemoTwin } from '@/domain/demoTwin';
 
@@ -25,6 +26,8 @@ export function Header() {
   const [pickerOpen, setPickerOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
+  const [importPreview, setImportPreview] = useState<TwinDoc | null>(null);
   const [includeLayout, setIncludeLayout] = useState(true);
 
   // Refresh recent-twins list
@@ -87,27 +90,16 @@ export function Header() {
     message.success('Exported');
   };
 
-  const doImport = () => {
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.accept = 'application/json';
-    input.onchange = async () => {
-      const file = input.files?.[0];
-      if (!file) return;
-      const text = await file.text();
-      try {
-        const imported = importTwinJson(text);
-        imported.name = `${imported.name} (imported)`;
-        await putTwin(imported);
-        setDoc(imported);
-        setActiveTwin(imported.id);
-        await setKv('activeTwinId', imported.id);
-        message.success('Imported');
-      } catch (e) {
-        message.error('Import failed: invalid file');
-      }
-    };
-    input.click();
+  const confirmImport = async () => {
+    if (!importPreview) return;
+    const imported = { ...importPreview, name: `${importPreview.name} (imported)` };
+    await putTwin(imported);
+    setDoc(imported);
+    setActiveTwin(imported.id);
+    await setKv('activeTwinId', imported.id);
+    setImportPreview(null);
+    setImportOpen(false);
+    message.success('Imported');
   };
 
   return (
@@ -143,7 +135,7 @@ export function Header() {
         </Button>
       </Dropdown>
 
-      <Button icon={<ImportOutlined />} onClick={doImport}>
+      <Button icon={<ImportOutlined />} onClick={() => { setImportPreview(null); setImportOpen(true); }}>
         Import
       </Button>
       <Button icon={<ExportOutlined />} onClick={() => setExportOpen(true)}>
@@ -198,6 +190,53 @@ export function Header() {
             </Space>
           </Form.Item>
         </Form>
+      </Modal>
+
+      <Modal
+        title="Import twin"
+        open={importOpen}
+        onCancel={() => { setImportOpen(false); setImportPreview(null); }}
+        okText="Import"
+        okButtonProps={{ disabled: !importPreview }}
+        onOk={() => void confirmImport()}
+      >
+        <Space direction="vertical" style={{ width: '100%' }} size={12}>
+          <Upload.Dragger
+            accept="application/json"
+            showUploadList={false}
+            beforeUpload={(file) => {
+              file.text().then((text) => {
+                try {
+                  const imported = importTwinJson(text);
+                  setImportPreview(imported);
+                } catch {
+                  message.error('Import failed: invalid file');
+                  setImportPreview(null);
+                }
+              });
+              return false; // prevent auto-upload; we read the file ourselves
+            }}
+            style={{ padding: 12 }}
+          >
+            <p style={{ margin: 0, color: 'var(--twin-text-muted)' }}>
+              <InboxOutlined style={{ fontSize: 24 }} />
+            </p>
+            <p style={{ margin: '4px 0 0' }}>Click or drop a <code>.twin.json</code> file</p>
+          </Upload.Dragger>
+          {importPreview ? (
+            <div style={{ borderTop: '1px solid var(--twin-border)', paddingTop: 8 }}>
+              <div style={{ fontWeight: 600, marginBottom: 4 }}>{importPreview.name}</div>
+              <Space wrap>
+                <Tag>{importPreview.objects.length} objects</Tag>
+                <Tag>{importPreview.relations.length} relations</Tag>
+                <Tag>{importPreview.schema.types.length} types</Tag>
+              </Space>
+              <p style={{ color: 'var(--twin-text-muted)', fontSize: 12, marginTop: 8, marginBottom: 0 }}>
+                Importing migrates the twin to the current schema version and assigns a fresh id.
+              </p>
+            </div>
+          ) : null}
+        </Space>
       </Modal>
 
       <Drawer

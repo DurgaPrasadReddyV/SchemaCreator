@@ -2,11 +2,14 @@
 
 import { useMemo, useState } from 'react';
 import { Select, Table, Tag, Space, Empty, Input } from 'antd';
+import { useRouter } from 'next/navigation';
 import { useTwinStore } from '@/state/twinStore';
 import { useFlowStore } from '@/state/flowStore';
 import type { FieldDef, TwinObject, TypeDef } from '@/domain/types';
+import { CapabilityBadges, DataCategoryChips } from '@/views/chips';
 
 export function TablesView() {
+  const router = useRouter();
   const doc = useTwinStore((s) => s.doc);
   const setSelected = useFlowStore((s) => s.setSelectedObject);
   const [typeId, setTypeId] = useState<string | null>(null);
@@ -99,7 +102,10 @@ export function TablesView() {
         dataSource={filteredRows}
         pagination={{ pageSize: 25 }}
         onRow={(record) => ({
-          onClick: () => setSelected(record.id),
+          onClick: () => {
+            setSelected(record.id);
+            router.push('/twin');
+          },
           style: { cursor: 'pointer' },
         })}
         columns={[
@@ -118,18 +124,16 @@ export function TablesView() {
             },
           })),
           {
+            title: 'Data category',
+            key: 'dataCategory',
+            render: (_, record) => <DataCategoryChips ids={record.dataCategory} schema={doc?.schema} size="small" />,
+          },
+          {
             title: 'Capabilities',
             key: 'capabilities',
             render: (_, record) => (
               <Space size={[4, 4]} wrap>
-                {record.capabilities.slice(0, 3).map((c) => (
-                  <Tag key={c} bordered={false}>
-                    {c}
-                  </Tag>
-                ))}
-                {record.capabilities.length > 3 ? (
-                  <Tag bordered={false}>+{record.capabilities.length - 3}</Tag>
-                ) : null}
+                <CapabilityBadges ids={record.capabilities} schema={doc?.schema} max={3} asTag />
               </Space>
             ),
           },

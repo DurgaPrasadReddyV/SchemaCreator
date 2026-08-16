@@ -30,7 +30,9 @@ import { computeReachabilityMemo, isValidRoot } from '@/domain/reachability';
 import { buildGraphFromTwin } from '@/graph/graphAdapter';
 import { TwinNode } from '@/graph/TwinNode';
 import { TwinEdge } from '@/graph/TwinEdge';
-import type { QueryMode, TwinObject } from '@/domain/types';
+import { CapabilityBadges } from '@/views/chips';
+import { classificationVar } from '@/theme/theme';
+import type { Classification, QueryMode, TwinObject } from '@/domain/types';
 
 const nodeTypes = { twinNode: TwinNode };
 const edgeTypes = { twinEdge: TwinEdge };
@@ -53,7 +55,6 @@ export function ReachabilityView() {
 
   const setReachable = useFlowStore((s) => s.setReachable);
   const setSelected = useFlowStore((s) => s.setSelectedObject);
-  const selectedId = useFlowStore((s) => s.selectedObjectId);
   const setSelectedRelation = useFlowStore((s) => s.setSelectedRelation);
 
   const { nodes: initialNodes, edges: initialEdges } = useMemo(
@@ -165,8 +166,6 @@ export function ReachabilityView() {
       </div>
     );
   }
-
-  const chain = result?.hopChains.find((c) => c.targetId === selectedId) ?? null;
 
   return (
     <div style={{ display: 'flex', height: '100%' }}>
@@ -337,6 +336,40 @@ export function ReachabilityView() {
                 },
               },
               {
+                title: 'Classification',
+                dataIndex: 'targetId',
+                key: 'cls',
+                width: 120,
+                render: (id: string) => {
+                  const o = doc.objects.find((x) => x.id === id);
+                  const cls = o?.values.classification as Classification | undefined;
+                  if (!cls) return <span style={{ color: 'var(--twin-text-muted)' }}>–</span>;
+                  return (
+                    <Tag
+                      style={{
+                        marginInlineEnd: 0,
+                        borderColor: classificationVar(cls),
+                        color: classificationVar(cls),
+                      }}
+                      bordered
+                    >
+                      {cls}
+                    </Tag>
+                  );
+                },
+              },
+              {
+                title: 'Capabilities',
+                dataIndex: 'targetId',
+                key: 'caps',
+                render: (id: string) => {
+                  const o = doc.objects.find((x) => x.id === id);
+                  if (!o || o.capabilities.length === 0)
+                    return <span style={{ color: 'var(--twin-text-muted)' }}>–</span>;
+                  return <CapabilityBadges ids={o.capabilities} schema={doc.schema} max={3} asTag />;
+                },
+              },
+              {
                 title: 'Reached via',
                 dataIndex: 'targetId',
                 key: 'via',
@@ -363,39 +396,6 @@ export function ReachabilityView() {
         ) : (
           <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="Run a query" />
         )}
-
-        {chain ? (
-          <div style={{ marginTop: 16 }}>
-            <div style={{ fontWeight: 600, marginBottom: 8 }}>Access chain</div>
-            <ol style={{ paddingLeft: 18, fontSize: 12, lineHeight: 1.6 }}>
-              {chain.steps.map((s, i) => {
-                const fromObj = doc.objects.find((o) => o.id === s.from);
-                const toObj = doc.objects.find((o) => o.id === s.to);
-                const rt = doc.schema.relationTypes.find((r) => r.id === s.relId);
-                return (
-                  <li key={i} className="mono">
-                    {(fromObj?.values.name as string) ?? s.from}
-                    {' '}
-                    <span style={{ color: 'var(--twin-text-muted)' }}>
-                      {rt
-                        ? s.dir === 'fwd'
-                          ? `─${rt.forwardLabel}→`
-                          : `←${rt.reverseLabel}─`
-                        : ''}
-                    </span>
-                    {' '}
-                    {(toObj?.values.name as string) ?? s.to}
-                    {s.flood ? (
-                      <Tag color="geekblue" style={{ marginLeft: 6 }}>
-                        flood via {String(doc.objects.find((o) => o.id === s.flood)?.values.name ?? s.flood)}
-                      </Tag>
-                    ) : null}
-                  </li>
-                );
-              })}
-            </ol>
-          </div>
-        ) : null}
       </div>
     </div>
   );

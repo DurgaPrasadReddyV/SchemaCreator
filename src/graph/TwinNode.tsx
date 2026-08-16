@@ -15,6 +15,7 @@ import type { Classification, TwinObject } from '@/domain/types';
 import { useTwinStore } from '@/state/twinStore';
 import { useFlowStore } from '@/state/flowStore';
 import { useReachabilityStore } from '@/state/reachabilityStore';
+import { CapabilityBadges } from '@/views/chips';
 
 export interface TwinNodeData {
   objectRefId: string;
@@ -93,14 +94,7 @@ function TwinNodeImpl({ data, id }: NodeProps) {
       </div>
       <div className="twin-node__label">{label}</div>
       <div className="twin-node__badges">
-        {obj?.capabilities.slice(0, 4).map((c) => (
-          <span key={c} className="twin-badge">
-            {c}
-          </span>
-        ))}
-        {obj && (obj.capabilities?.length ?? 0) > 4 ? (
-          <span className="twin-badge">+{obj.capabilities.length - 4}</span>
-        ) : null}
+        {obj ? <CapabilityBadges ids={obj.capabilities} schema={doc?.schema} max={4} /> : null}
       </div>
       <Handle type="source" position={Position.Bottom} />
     </div>

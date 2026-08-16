@@ -3,9 +3,11 @@
 import { Form, Input, InputNumber, Select, Switch, Empty, Tag, Space, Divider } from 'antd';
 import { useTwinStore } from '@/state/twinStore';
 import { useFlowStore } from '@/state/flowStore';
+import { useReachabilityStore } from '@/state/reachabilityStore';
 import { useMemo } from 'react';
 import type { Classification, FieldDef, TwinObject, TwinRelation, TwinDoc, TypeDef } from '@/domain/types';
 import { useAutosave } from '@/shell/useAutosave';
+import { DataCategoryChips } from '@/views/chips';
 
 export function Inspector() {
   useAutosave();
@@ -16,6 +18,7 @@ export function Inspector() {
   const setReachable = useFlowStore((s) => s.setReachable);
   const setSelected = useFlowStore((s) => s.setSelectedObject);
   const setSelectedRelation = useFlowStore((s) => s.setSelectedRelation);
+  const reachResult = useReachabilityStore((s) => s.result);
 
   const rel = useMemo(
     () => (selectedRelationId ? doc?.relations.find((r) => r.id === selectedRelationId) ?? null : null),
@@ -133,13 +136,56 @@ export function Inspector() {
         {obj.dataCategory && obj.dataCategory.length > 0 ? (
           <div style={{ marginTop: 8 }}>
             <Space wrap>
-              {obj.dataCategory.map((c) => (
-                <Tag key={c}>{c}</Tag>
-              ))}
+              <DataCategoryChips ids={obj.dataCategory} schema={doc.schema} size="small" />
             </Space>
           </div>
         ) : null}
       </Form>
+
+      {(() => {
+        // Access chain for the selected node, when a reachability result is
+        // live (story 65 — moved here from the Reachability side panel so the
+        // chain lives next to the object being inspected).
+        const chain = reachResult?.hopChains.find((c) => c.targetId === obj.id);
+        if (!chain || chain.steps.length === 0) return null;
+        return (
+          <>
+            <Divider style={{ margin: '12px 0' }} />
+            <div
+              style={{
+                fontWeight: 600,
+                fontSize: 12,
+                textTransform: 'uppercase',
+                color: 'var(--twin-text-muted)',
+                marginBottom: 6,
+              }}
+            >
+              Access chain
+            </div>
+            <ol style={{ paddingLeft: 18, fontSize: 12, lineHeight: 1.6, margin: 0 }}>
+              {chain.steps.map((s, i) => {
+                const fromObj = doc.objects.find((o) => o.id === s.from);
+                const toObj = doc.objects.find((o) => o.id === s.to);
+                const rt = doc.schema.relationTypes.find((r) => r.id === s.relId);
+                return (
+                  <li key={i} className="mono">
+                    {(fromObj?.values.name as string) ?? s.from}{' '}
+                    <span style={{ color: 'var(--twin-text-muted)' }}>
+                      {rt ? (s.dir === 'fwd' ? `─${rt.forwardLabel}→` : `←${rt.reverseLabel}─`) : ''}
+                    </span>{' '}
+                    {(toObj?.values.name as string) ?? s.to}
+                    {s.flood ? (
+                      <Tag color="geekblue" style={{ marginLeft: 6 }}>
+                        flood via {String(doc.objects.find((o) => o.id === s.flood)?.values.name ?? s.flood)}
+                      </Tag>
+                    ) : null}
+                  </li>
+                );
+              })}
+            </ol>
+          </>
+        );
+      })()}
     </div>
   );
 }

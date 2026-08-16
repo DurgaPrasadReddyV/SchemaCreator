@@ -68,6 +68,10 @@ export const CSS_VARS = {
   reachability: '--twin-reachability',
   flood: '--twin-flood',
   brand: '--twin-brand',
+  statusGood: '--twin-status-good',
+  statusWarning: '--twin-status-warning',
+  statusSerious: '--twin-status-serious',
+  statusCritical: '--twin-status-critical',
 } as const;
 
 export const lightTheme: ThemeConfig = {
@@ -118,6 +122,10 @@ export function cssVarValues(theme: 'light' | 'dark') {
     [CSS_VARS.reachability]: REACHABILITY[theme],
     [CSS_VARS.flood]: FLOOD[theme],
     [CSS_VARS.brand]: BRAND[theme],
+    [CSS_VARS.statusGood]: STATUS.good,
+    [CSS_VARS.statusWarning]: STATUS.warning,
+    [CSS_VARS.statusSerious]: STATUS.serious,
+    [CSS_VARS.statusCritical]: STATUS.critical,
   } as Record<string, string>;
 }
 

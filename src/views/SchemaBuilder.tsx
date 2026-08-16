@@ -48,6 +48,7 @@ import type {
 } from '@/domain/types';
 import { CLASSIFICATION_OPTIONS, FIELD_TYPE_OPTIONS } from '@/domain/types';
 import { useAutosave } from '@/shell/useAutosave';
+import { DataCategoryChips } from '@/views/chips';
 
 /** AntD icon names offered for Types. Matches the starter-pack icon set. */
 const ICON_OPTIONS = [
@@ -778,7 +779,7 @@ function DataCategoriesManager({
             alignItems: 'center',
           }}
         >
-          <span style={{ fontWeight: 600 }}>{c.name}</span>
+          <DataCategoryChips ids={[c.id]} schema={schema} />
           <Tag color="blue">{c.defaultClassification}</Tag>
           <Space size={4} wrap>
             {c.recommendedCapabilities.map((r) => (
