@@ -235,7 +235,7 @@ export function TwinGraph() {
           okText="Create"
           onCancel={() => setAddOpen(false)}
           onOk={() => form.submit()}
-          destroyOnClose
+          destroyOnHidden
         >
           <Form form={form} layout="vertical" onFinish={addObject}>
             <Form.Item label="Type" name="typeId" rules={[{ required: true }]}>

@@ -68,22 +68,20 @@ export function Dashboard() {
       .slice(0, 5);
   }, [doc]);
 
-  if (!doc) {
-    return (
-      <div className="twin-page">
-        <Empty description="No twin loaded" />
-      </div>
-    );
-  }
-
-  const totalObjects = doc.objects.length;
-  const totalRelations = doc.relations.length;
-  const totalUsers = doc.objects.filter((o) => o.typeId === 'type.user').length;
-
   // Per-classification exposure: how many sensitive columns sit in each tier
   // (story 69). A column counts if it has a classification or a data-category tag.
-  const sensitiveColumns = doc.objects.filter(
-    (o) => o.typeId === 'type.column' && (o.values.classification || (o.dataCategory?.length ?? 0) > 0),
+  // Hooks below must run on every render (including when doc is null) so React's
+  // hook order stays stable across the early-return at the top of this function.
+  const sensitiveColumns = useMemo(
+    () =>
+      doc
+        ? doc.objects.filter(
+            (o) =>
+              o.typeId === 'type.column' &&
+              (o.values.classification || (o.dataCategory?.length ?? 0) > 0),
+          )
+        : [],
+    [doc],
   );
   const byClassification = useMemo(() => {
     const tiers: { tier: Classification; count: number }[] = [
@@ -101,6 +99,18 @@ export function Dashboard() {
     }
     return { tiers, unclassified, total: sensitiveColumns.length };
   }, [sensitiveColumns]);
+
+  if (!doc) {
+    return (
+      <div className="twin-page">
+        <Empty description="No twin loaded" />
+      </div>
+    );
+  }
+
+  const totalObjects = doc.objects.length;
+  const totalRelations = doc.relations.length;
+  const totalUsers = doc.objects.filter((o) => o.typeId === 'type.user').length;
 
   return (
     <div className="twin-page">

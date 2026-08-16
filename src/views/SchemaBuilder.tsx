@@ -75,6 +75,11 @@ export function SchemaBuilder() {
   const [activeTypeId, setActiveTypeId] = useState<string | null>(null);
   const [conflictTypeId, setConflictTypeId] = useState<string | null>(null);
 
+  // @dnd-kit sensors: small activation distance so click-to-edit inputs aren't grabbed.
+  // Must run on every render (including when doc is null) so React's hook order stays
+  // stable across the early-return below.
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
+
   if (!doc) {
     return (
       <div className="twin-page">
@@ -127,7 +132,7 @@ export function SchemaBuilder() {
   };
 
   // @dnd-kit sensors: small activation distance so click-to-edit inputs aren't grabbed.
-  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
+  // (hoisted above the early return — see comment near the call site.)
 
   // Drag-and-drop reordering. Item ids are the raw SectionDef.id / FieldDef.id —
   // the helpers in domain/schemaOps use the same ids to locate indices. We
@@ -330,12 +335,14 @@ export function SchemaBuilder() {
                     >
                       {/* Type details: name + icon (the only type-level edits). */}
                       <Space style={{ marginBottom: 12 }} wrap>
-                        <Input
-                          value={type.name}
-                          onChange={(e) => updateTypeSchema({ ...type, name: e.target.value })}
-                          style={{ width: 200 }}
-                          addonBefore="Name"
-                        />
+                        <Space.Compact style={{ width: 200 }}>
+                          <Button disabled>Name</Button>
+                          <Input
+                            value={type.name}
+                            onChange={(e) => updateTypeSchema({ ...type, name: e.target.value })}
+                            style={{ width: 'calc(100% - 56px)' }}
+                          />
+                        </Space.Compact>
                         <Select
                           value={type.icon}
                           onChange={(icon) => updateTypeSchema({ ...type, icon })}
@@ -550,7 +557,7 @@ function RelationTypesManager({
         onCancel={() => setOpen(false)}
         onOk={submit}
         okText={editing ? 'Save' : 'Create'}
-        destroyOnClose
+        destroyOnHidden
       >
         <Form form={form} layout="vertical">
           <Form.Item label="Name" name="name" rules={[{ required: true }]}>
@@ -679,7 +686,7 @@ function CapabilitiesManager({
         onCancel={() => setOpen(false)}
         onOk={submit}
         okText={editing ? 'Save' : 'Create'}
-        destroyOnClose
+        destroyOnHidden
       >
         <Form form={form} layout="vertical">
           <Form.Item label="Name" name="name" rules={[{ required: true }]}>
@@ -805,7 +812,7 @@ function DataCategoriesManager({
         onCancel={() => setOpen(false)}
         onOk={submit}
         okText={editing ? 'Save' : 'Create'}
-        destroyOnClose
+        destroyOnHidden
       >
         <Form form={form} layout="vertical">
           <Form.Item label="Name" name="name" rules={[{ required: true }]}>
