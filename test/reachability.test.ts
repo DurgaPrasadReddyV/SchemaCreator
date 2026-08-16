@@ -26,7 +26,7 @@ const byId = (id: string) => {
 };
 
 test('SSN trace A (data→user from SSN): Jane Doe is reachable', () => {
-  const r = computeReachability(schema, objects, relations, 'ssn', 'data-to-user');
+  const r = computeReachability({ schema, objects, relations },'ssn', 'data-to-user');
   assert.ok(r.reachableIds.has('jane'), 'Jane reachable');
   assert.ok(r.reachableIds.has('appReader'), 'app_reader reachable');
   assert.ok(r.reachableIds.has('role'), 'db_datareader reachable');
@@ -34,7 +34,7 @@ test('SSN trace A (data→user from SSN): Jane Doe is reachable', () => {
 });
 
 test('SSN trace A: hop chain to Jane starts at SSN and ends at Jane', () => {
-  const r = computeReachability(schema, objects, relations, 'ssn', 'data-to-user');
+  const r = computeReachability({ schema, objects, relations },'ssn', 'data-to-user');
   const janeChain = r.hopChains.find((c) => c.targetId === 'jane');
   assert.ok(janeChain, 'chain to Jane present');
   const rels = janeChain.steps.map((s) => s.relId);
@@ -52,7 +52,7 @@ test('SSN trace A: Jane is also reachable via the longer service-account chain',
   // The spec calls out the longer chain: returns -> exposes -> usedAsServiceAccountBy -> mapsTo
   // -> memberOf/accesses ... -> uses. Both are valid. The hop table contains
   // every reachable object and shortest-first chains.
-  const r = computeReachability(schema, objects, relations, 'ssn', 'data-to-user');
+  const r = computeReachability({ schema, objects, relations },'ssn', 'data-to-user');
   // service, login, appReader, role should all be reachable
   assert.ok(r.reachableIds.has('service'), 'web service reachable');
   assert.ok(r.reachableIds.has('login'), 'sql login reachable');
@@ -61,7 +61,7 @@ test('SSN trace A: Jane is also reachable via the longer service-account chain',
 });
 
 test('SSN trace B (user→data from Jane): SSN and siblings reachable', () => {
-  const r = computeReachability(schema, objects, relations, 'jane', 'user-to-data');
+  const r = computeReachability({ schema, objects, relations },'jane', 'user-to-data');
   assert.ok(r.reachableIds.has('ssn'), 'SSN reachable');
   assert.ok(r.reachableIds.has('name'), 'name reachable');
   assert.ok(r.reachableIds.has('email'), 'email reachable');
@@ -70,7 +70,7 @@ test('SSN trace B (user→data from Jane): SSN and siblings reachable', () => {
 });
 
 test('SSN trace B: hop chain to SSN reconstructs the inward path', () => {
-  const r = computeReachability(schema, objects, relations, 'jane', 'user-to-data');
+  const r = computeReachability({ schema, objects, relations },'jane', 'user-to-data');
   const ssnChain = r.hopChains.find((c) => c.targetId === 'ssn');
   assert.ok(ssnChain, 'chain to SSN present');
   const rels = ssnChain.steps.map((s) => s.relId);
@@ -81,7 +81,7 @@ test('SSN trace B: hop chain to SSN reconstructs the inward path', () => {
 
 test('Descendant-flood on access: Table → all Columns', () => {
   // From appReader via accesses(table) we should reach every column
-  const r = computeReachability(schema, objects, relations, 'appReader', 'user-to-data');
+  const r = computeReachability({ schema, objects, relations },'appReader', 'user-to-data');
   assert.ok(r.reachableIds.has('table'));
   assert.ok(r.reachableIds.has('ssn'));
   assert.ok(r.reachableIds.has('name'));
@@ -92,14 +92,14 @@ test('Descendant-flood on access: Table → all Columns', () => {
 test('Descendant-flood: Database → all Tables and their Columns', () => {
   // From a fresh role that accesses table, building a small subgraph
   // Manually: from role via accesses(table) we should reach columns
-  const r = computeReachability(schema, objects, relations, 'role', 'data-to-user');
+  const r = computeReachability({ schema, objects, relations },'role', 'data-to-user');
   assert.ok(r.reachableIds.has('table'));
   assert.ok(r.reachableIds.has('ssn'));
   assert.ok(r.reachableIds.has('email'));
 });
 
 test('Flood-reached steps are annotated with the flood container', () => {
-  const r = computeReachability(schema, objects, relations, 'appReader', 'user-to-data');
+  const r = computeReachability({ schema, objects, relations },'appReader', 'user-to-data');
   const ssnChain = r.hopChains.find((c) => c.targetId === 'ssn');
   assert.ok(ssnChain, 'ssn chain exists');
   const flooded = ssnChain.steps.find((s) => s.flood != null);
@@ -110,13 +110,13 @@ test('Flood-reached steps are annotated with the flood container', () => {
 test('contains alone never propagates', () => {
   // server (a top-level container) reached from nothing — so starting from
   // server, contains never grants access. We expect only `server` reachable.
-  const r = computeReachability(schema, objects, relations, 'server', 'user-to-data');
+  const r = computeReachability({ schema, objects, relations },'server', 'user-to-data');
   // Nothing else is reachable from server because contains doesn't propagate.
   assert.deepEqual([...r.reachableIds].sort(), ['server']);
 });
 
 test('memberOf mode-dep: in data→user, app_reader does NOT reach role via memberOf', () => {
-  const r = computeReachability(schema, objects, relations, 'appReader', 'data-to-user');
+  const r = computeReachability({ schema, objects, relations },'appReader', 'data-to-user');
   // role is reachable via different paths (e.g. through access->table->ssn->returns->...?? no, role is not in the outward chain from appReader)
   // In data→user mode, appReader → role via memberOf is NOT traversed. Role may still be reachable by other means.
   const roleChain = r.hopChains.find((c) => c.targetId === 'role');
@@ -127,7 +127,7 @@ test('memberOf mode-dep: in data→user, app_reader does NOT reach role via memb
 });
 
 test('memberOf mode-dep: in data→user, role reaches app_reader via memberOf', () => {
-  const r = computeReachability(schema, objects, relations, 'role', 'data-to-user');
+  const r = computeReachability({ schema, objects, relations },'role', 'data-to-user');
   const arChain = r.hopChains.find((c) => c.targetId === 'appReader');
   assert.ok(arChain, 'role → appReader chain exists');
   assert.ok(
@@ -137,7 +137,7 @@ test('memberOf mode-dep: in data→user, role reaches app_reader via memberOf', 
 });
 
 test('memberOf mode-dep: in user→data, app_reader reaches role via memberOf', () => {
-  const r = computeReachability(schema, objects, relations, 'appReader', 'user-to-data');
+  const r = computeReachability({ schema, objects, relations },'appReader', 'user-to-data');
   const roleChain = r.hopChains.find((c) => c.targetId === 'role');
   assert.ok(roleChain, 'appReader → role chain exists');
   assert.ok(
@@ -164,7 +164,7 @@ test('False-positive guard: a role-only membership does not grant a role access 
     { id: 'ca1', relationTypeId: 'rel.accesses', fromId: 'appReader2', toId: 'otherTable' },
     { id: 'cc1', relationTypeId: 'rel.contains', fromId: 'otherTable', toId: 'otherCol' },
   ];
-  const r = computeReachability(schema, customObjects, customRels, 'role2', 'user-to-data');
+  const r = computeReachability({ schema, objects: customObjects, relations: customRels }, 'role2', 'user-to-data');
   // role2 has no direct accesses in this scenario; in user→data mode, memberOf is DBUser→Role
   // so role2 cannot reach appReader2, and therefore cannot reach otherTable.
   assert.equal(r.reachableIds.has('otherTable'), false, 'role2 does NOT reach otherTable via membership');
@@ -173,7 +173,7 @@ test('False-positive guard: a role-only membership does not grant a role access 
 });
 
 test('Capability flags do not alter reachability', () => {
-  const r1 = computeReachability(schema, objects, relations, 'ssn', 'data-to-user');
+  const r1 = computeReachability({ schema, objects, relations },'ssn', 'data-to-user');
   const dirty: TwinObject[] = objects.map((o) => ({
     ...o,
     capabilities: [...(o.capabilities ?? []), 'some-flag'],
@@ -182,7 +182,7 @@ test('Capability flags do not alter reachability', () => {
     ...r,
     capabilities: ['another-flag'],
   }));
-  const r2 = computeReachability(schema, dirty, dirtyRelations, 'ssn', 'data-to-user');
+  const r2 = computeReachability({ schema, objects: dirty, relations: dirtyRelations }, 'ssn', 'data-to-user');
   assert.deepEqual([...r2.reachableIds].sort(), [...r1.reachableIds].sort());
   assert.equal(r1.hopChains.length, r2.hopChains.length);
 });
@@ -223,8 +223,8 @@ test('Root eligibility: data→who roots require non-Public classification or a 
 });
 
 test('Determinism: same input yields same hop ordering across runs', () => {
-  const r1 = computeReachability(schema, objects, relations, 'ssn', 'data-to-user');
-  const r2 = computeReachability(schema, objects, relations, 'ssn', 'data-to-user');
+  const r1 = computeReachability({ schema, objects, relations },'ssn', 'data-to-user');
+  const r2 = computeReachability({ schema, objects, relations },'ssn', 'data-to-user');
   assert.deepEqual(
     r1.hopChains.map((c) => c.targetId),
     r2.hopChains.map((c) => c.targetId),
@@ -258,11 +258,12 @@ test('Cycles do not loop forever; same input → same output even with cycle', (
         fromTypeIds: ['type.uiApp'],
         toTypeIds: ['type.user'],
         propagatesReachability: true,
+        direction: 'bidirectional',
       },
     ],
   };
   cyclicRels.push({ id: 'r2', relationTypeId: 'rel.cyclic', fromId: 'b', toId: 'a' });
-  const r = computeReachability(cyclicSchema, cyclicObjects, cyclicRels, 'a', 'user-to-data');
+  const r = computeReachability({ schema: cyclicSchema, objects: cyclicObjects, relations: cyclicRels }, 'a', 'user-to-data');
   assert.ok(r.reachableIds.has('a'));
   assert.ok(r.reachableIds.has('b'));
   assert.equal(r.reachableIds.size, 2, 'cycle terminated');
@@ -283,6 +284,7 @@ test('Parallel edges between same pair via different relation types are each tra
         fromTypeIds: ['type.user'],
         toTypeIds: ['type.uiApp'],
         propagatesReachability: true,
+        direction: 'bidirectional',
       },
     ],
   };
@@ -291,7 +293,7 @@ test('Parallel edges between same pair via different relation types are each tra
     { id: 'par1', relationTypeId: 'rel.uses', fromId: 'jane', toId: 'portal' },
     { id: 'par2', relationTypeId: 'rel.alsoUses', fromId: 'jane', toId: 'portal' },
   ];
-  const r = computeReachability(augSchema, objects, augRelations, 'jane', 'user-to-data');
+  const r = computeReachability({ schema: augSchema, objects, relations: augRelations }, 'jane', 'user-to-data');
   const portalChain = r.hopChains.find((c) => c.targetId === 'portal');
   assert.ok(portalChain, 'portal reachable');
   // Both edges should be in the chain (or at least the engine should have a record of one; we just
@@ -303,14 +305,14 @@ test('Parallel edges between same pair via different relation types are each tra
 test('Memoization: same (revision, root, mode) returns the cached result', () => {
   clearReachabilityCache();
   const rev = graphRevisionOf(objects, relations);
-  const a = computeReachabilityMemo(rev, schema, objects, relations, 'ssn', 'data-to-user');
-  const b = computeReachabilityMemo(rev, schema, objects, relations, 'ssn', 'data-to-user');
+  const a = computeReachabilityMemo(rev, { schema, objects, relations }, 'ssn', 'data-to-user');
+  const b = computeReachabilityMemo(rev, { schema, objects, relations }, 'ssn', 'data-to-user');
   // Same object identity proves cache hit
   assert.equal(a, b, 'memoized result returns identical object');
 });
 
 test('perHopReachable: hop 0 is the root; later hops contain transitively-reached ids', () => {
-  const r = computeReachability(schema, objects, relations, 'ssn', 'data-to-user');
+  const r = computeReachability({ schema, objects, relations },'ssn', 'data-to-user');
   assert.deepEqual([...r.perHopReachable.get(0)!], ['ssn']);
   const h1 = r.perHopReachable.get(1);
   assert.ok(h1);

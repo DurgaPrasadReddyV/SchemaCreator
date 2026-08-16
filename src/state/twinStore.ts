@@ -5,6 +5,7 @@
 
 import { create } from 'zustand';
 import type { TwinDoc } from '@/domain/types';
+import { graphRevisionOf } from '@/domain/reachability';
 
 export interface TwinState {
   doc: TwinDoc | null;
@@ -20,22 +21,13 @@ export const useTwinStore = create<TwinState>((set, get) => ({
   doc: null,
   dirty: false,
   graphRevision: '0',
-  setDoc: (doc) => set({ doc, dirty: false, graphRevision: hashRevision(doc) }),
+  setDoc: (doc) => set({ doc, dirty: false, graphRevision: graphRevisionOf(doc.objects, doc.relations) }),
   setDirty: (d) => set({ dirty: d }),
   patchDoc: (patch) => {
     const cur = get().doc;
     if (!cur) return;
     const next = { ...cur, ...patch, updatedAt: Date.now() };
-    set({ doc: next, dirty: true, graphRevision: hashRevision(next) });
+    set({ doc: next, dirty: true, graphRevision: graphRevisionOf(next.objects, next.relations) });
   },
   bumpRevision: () => set({ graphRevision: String(Date.now()) }),
 }));
-
-function hashRevision(doc: TwinDoc): string {
-  const o = doc.objects.map((x) => x.id).sort().join(',');
-  const r = doc.relations
-    .map((x) => `${x.id}:${x.fromId}->${x.toId}:${x.relationTypeId}`)
-    .sort()
-    .join(',');
-  return `${o.length}:${o}|${r.length}:${r}`;
-}

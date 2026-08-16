@@ -5,7 +5,16 @@
  */
 
 import { buildStarterPack, SCHEMA_VERSION, STARTER_PACK_VERSION } from './starterPack';
-import type { TwinDoc, TwinSchema, TypeDef, TwinObject, FieldDef } from './types';
+import type {
+  TwinDoc,
+  TwinSchema,
+  TypeDef,
+  TwinObject,
+  TwinRelation,
+  RelationTypeDef,
+  FieldDef,
+} from './types';
+import { NAME_FIELD_ID } from './types';
 
 /**
  * Normalize an imported (possibly older) TwinDoc to the current shape.
@@ -72,7 +81,7 @@ function mergeSchema(starter: TwinSchema, raw?: Partial<TwinSchema>): TwinSchema
     types: Array.isArray(raw.types) && raw.types.length > 0 ? raw.types : starter.types,
     relationTypes:
       Array.isArray(raw.relationTypes) && raw.relationTypes.length > 0
-        ? raw.relationTypes
+        ? raw.relationTypes.map(normalizeRelationType)
         : starter.relationTypes,
     capabilities:
       Array.isArray(raw.capabilities) && raw.capabilities.length > 0
@@ -87,6 +96,15 @@ function mergeSchema(starter: TwinSchema, raw?: Partial<TwinSchema>): TwinSchema
   };
 }
 
+/** Fill a relation type's `direction` if an older-shape twin omitted it.
+ *  The input is typed as `RelationTypeDef` (the current shape) but an
+ *  imported/older twin parsed from JSON may lack `direction` at runtime. */
+function normalizeRelationType(rt: RelationTypeDef): RelationTypeDef {
+  const out: RelationTypeDef = { ...rt };
+  if (!out.direction) out.direction = 'bidirectional';
+  return out;
+}
+
 function normalizeObject(o: Partial<TwinObject>): TwinObject {
   const out: TwinObject = {
     id: typeof o.id === 'string' && o.id ? o.id : cryptoId(),
@@ -98,9 +116,9 @@ function normalizeObject(o: Partial<TwinObject>): TwinObject {
   return out;
 }
 
-function normalizeRelation(r: Partial<TwinObject>): import('./types').TwinRelation {
-  const rel = r as unknown as import('./types').TwinRelation;
-  const out: import('./types').TwinRelation = {
+function normalizeRelation(r: Partial<TwinRelation>): TwinRelation {
+  const rel = r as unknown as TwinRelation;
+  const out: TwinRelation = {
     id: typeof rel.id === 'string' && rel.id ? rel.id : cryptoId(),
     relationTypeId: typeof rel.relationTypeId === 'string' ? rel.relationTypeId : 'rel.uses',
     fromId: typeof rel.fromId === 'string' ? rel.fromId : '',
@@ -196,7 +214,7 @@ export function detectRepairConflicts(
     for (const obj of objs) {
       // 1) Orphaned values: keys in obj.values that don't have a current field def
       for (const fid of Object.keys(obj.values ?? {})) {
-        if (fid === 'name') continue; // name is the well-known identity key
+        if (fid === NAME_FIELD_ID) continue; // name is the well-known identity key
         if (!fieldIds.has(fid)) {
           conflicts.push({
             typeId: type.id,
@@ -209,7 +227,7 @@ export function detectRepairConflicts(
       }
       // 2) Invalid value for current type
       for (const [fid, val] of Object.entries(obj.values ?? {})) {
-        if (fid === 'name') continue;
+        if (fid === NAME_FIELD_ID) continue;
         const f = fieldById.get(fid);
         if (!f) continue;
         if (!isTypeCompatible(f, val)) {

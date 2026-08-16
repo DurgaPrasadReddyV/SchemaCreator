@@ -44,7 +44,11 @@ export function Dashboard() {
     );
     return cols
       .map((c) => {
-        const r = computeReachability(doc.schema, doc.objects, doc.relations, c.id, 'data-to-user');
+        const r = computeReachability(
+          { schema: doc.schema, objects: doc.objects, relations: doc.relations },
+          c.id,
+          'data-to-user',
+        );
         const users = doc.objects.filter(
           (o) => o.typeId === 'type.user' && r.reachableIds.has(o.id),
         );

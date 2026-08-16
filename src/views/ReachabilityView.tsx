@@ -89,7 +89,11 @@ export function ReachabilityView() {
   // Run the query
   const runQuery = useCallback(() => {
     if (!doc || !rootId) return;
-    const r = computeReachability(doc.schema, doc.objects, doc.relations, rootId, mode);
+    const r = computeReachability(
+      { schema: doc.schema, objects: doc.objects, relations: doc.relations },
+      rootId,
+      mode,
+    );
     setResult(r);
     setReachable(r.reachableIds);
     setCurrentHop(0);
@@ -98,7 +102,11 @@ export function ReachabilityView() {
   // Auto-run on first mount if a root is already chosen
   useEffect(() => {
     if (doc && rootId) {
-      const r = computeReachability(doc.schema, doc.objects, doc.relations, rootId, mode);
+      const r = computeReachability(
+        { schema: doc.schema, objects: doc.objects, relations: doc.relations },
+        rootId,
+        mode,
+      );
       setResult(r);
       setReachable(r.reachableIds);
     }

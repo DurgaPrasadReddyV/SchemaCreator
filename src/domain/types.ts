@@ -7,7 +7,45 @@
 
 export type FieldType = 'text' | 'enum' | 'multi-tag' | 'boolean' | 'number' | 'ref';
 
+/** All field types, in a stable order. Consumed by the schema builder's type
+ *  Select and the conflict detector so the two never diverge. */
+export const FIELD_TYPES: readonly FieldType[] = [
+  'text',
+  'enum',
+  'multi-tag',
+  'boolean',
+  'number',
+  'ref',
+];
+
+export const FIELD_TYPE_OPTIONS = FIELD_TYPES.map((t) => ({ value: t, label: t }));
+
 export type Classification = 'public' | 'internal' | 'confidential' | 'restricted';
+
+/** Classification tiers, least- to most-sensitive. The blue ordinal ramp is
+ *  keyed by this order (darker = more sensitive). */
+export const CLASSIFICATIONS: readonly Classification[] = [
+  'public',
+  'internal',
+  'confidential',
+  'restricted',
+];
+
+export const CLASSIFICATION_OPTIONS = CLASSIFICATIONS.map((c) => ({
+  value: c,
+  label: c.charAt(0).toUpperCase() + c.slice(1),
+}));
+
+/** Ordinal rank of a classification (1 = Public … 4 = Restricted). 0 if unset. */
+export function classificationRank(c: Classification | undefined | null): number {
+  if (!c) return 0;
+  const i = CLASSIFICATIONS.indexOf(c);
+  return i < 0 ? 0 : i + 1;
+}
+
+/** The well-known identity field id. Object node labels come from `values[NAME_FIELD_ID]`,
+ *  and this id is exempt from orphaned-value conflict detection (it always exists). */
+export const NAME_FIELD_ID = 'name';
 
 export interface FieldDef {
   id: string;
@@ -34,6 +72,13 @@ export interface TypeDef {
   sections: SectionDef[];
 }
 
+/** Direction semantic of a relation type.
+ *  - `forward`: propagates only source → target
+ *  - `reverse`: propagates only target → source
+ *  - `bidirectional`: propagates both ways
+ *  `memberOf` overrides this with its mode-dependent rule. */
+export type RelationDirection = 'forward' | 'reverse' | 'bidirectional';
+
 export interface RelationTypeDef {
   id: string;
   name: string;
@@ -42,6 +87,7 @@ export interface RelationTypeDef {
   fromTypeIds: string[]; // allowed source type ids
   toTypeIds: string[]; // allowed target type ids
   propagatesReachability: boolean;
+  direction: RelationDirection;
   /** Access edges traverse bidirectionally except memberOf, which is mode-dependent. */
   modeDependent?: boolean;
 }
@@ -85,6 +131,20 @@ export interface TwinRelation {
   fromId: string;
   toId: string;
   capabilities?: string[];
+}
+
+/**
+ * The logical graph the reachability engine operates on.
+ *
+ * Bundles the three fields that always travel together (`schema`, `objects`,
+ * `relations`) — all are slices of a `TwinDoc`. Passing the bundle avoids the
+ * `(schema, objects, relations)` data clump at every call site and matches the
+ * spec's `computeReachability(graph, rootId, mode)` API shape.
+ */
+export interface Graph {
+  schema: TwinSchema;
+  objects: TwinObject[];
+  relations: TwinRelation[];
 }
 
 export interface ReactFlowJsonObject {

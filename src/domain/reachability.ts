@@ -6,9 +6,11 @@
  * - Mode-dependent memberOf (user→what: DatabaseUser→Role; data→who: Role→DatabaseUser)
  * - Descendant-flood-on-access: reaching a node via `accesses` floods its contains-subtree
  * - `contains` alone never propagates
- * - Deterministic ordering: adjacency iterated sorted by `to` then by `relInst` id
+ * - Relation-type `direction` semantic honored (forward / reverse / bidirectional)
+ * - Deterministic ordering: adjacency iterated sorted by object id then relation type id
  * - Cycle-guarded
  * - Parallel edges via different relation types are each traversable
+ * - Optional `maxHops` depth cap
  * - Capability flags annotate only — never alter reachability
  *
  * Returned `ReachabilityResult` includes:
@@ -18,6 +20,7 @@
  */
 
 import type {
+  Graph,
   QueryMode,
   ReachabilityResult,
   HopStep,
@@ -26,6 +29,11 @@ import type {
   TwinRelation,
   TwinSchema,
 } from './types';
+
+export interface ReachabilityOptions {
+  /** Optional depth cap: only nodes within `maxHops` hops of the root are reached. */
+  maxHops?: number;
+}
 
 interface AdjEdge {
   to: string;
@@ -105,31 +113,34 @@ export function buildAdjacency(
       continue;
     }
 
+    const dir = rt.direction ?? 'bidirectional';
+
     if (rt.id === 'rel.accesses') {
       // Accesses + descendant-flood: reaching B includes B's contains-subtree.
       const targets = [B, ...descendantsOf(B, children)];
       for (const t of targets) {
         const flood = t === B ? null : B;
-        add(A, t, edge(t, rt.id, r.id, 'fwd', flood));
-        add(t, A, edge(A, rt.id, r.id, 'rev', flood));
+        if (dir !== 'reverse') add(A, t, edge(t, rt.id, r.id, 'fwd', flood));
+        if (dir !== 'forward') add(t, A, edge(A, rt.id, r.id, 'rev', flood));
       }
       continue;
     }
 
-    // Bidirectional propagation for all other access edges.
-    add(A, B, edge(B, rt.id, r.id, 'fwd'));
-    add(B, A, edge(A, rt.id, r.id, 'rev'));
+    // Honor the relation type's direction semantic for propagation.
+    if (dir !== 'reverse') add(A, B, edge(B, rt.id, r.id, 'fwd'));
+    if (dir !== 'forward') add(B, A, edge(A, rt.id, r.id, 'rev'));
   }
 
   return adj;
 }
 
+/** Deterministic adjacency order: by target object id, then relation type id. */
 function deterministicOrder(arr: AdjEdge[]): AdjEdge[] {
   return [...arr].sort((a, b) => {
     if (a.to < b.to) return -1;
     if (a.to > b.to) return 1;
-    if (a.relInst < b.relInst) return -1;
-    if (a.relInst > b.relInst) return 1;
+    if (a.relId < b.relId) return -1;
+    if (a.relId > b.relId) return 1;
     return 0;
   });
 }
@@ -144,6 +155,7 @@ interface BfsResult {
 function bfs(
   adj: Map<string, AdjEdge[]>,
   root: string,
+  maxHops?: number,
 ): BfsResult {
   const visited = new Set<string>([root]);
   const parent = new Map<string, AdjEdge & { from: string }>();
@@ -154,6 +166,7 @@ function bfs(
   let hop = 0;
   while (frontier.length) {
     hop++;
+    if (maxHops != null && hop > maxHops) break;
     const next: string[] = [];
     for (const u of frontier) {
       const edges = deterministicOrder(adj.get(u) ?? []);
@@ -194,16 +207,21 @@ function chainTo(
   return out.reverse();
 }
 
+/**
+ * Compute reachability over a logical graph.
+ *
+ * Spec API: `computeReachability(graph, rootId, mode, options?)`. `graph` bundles
+ * the schema + objects + relations that every caller was passing unpacked.
+ */
 export function computeReachability(
-  schema: TwinSchema,
-  objects: TwinObject[],
-  relations: TwinRelation[],
+  graph: Graph,
   rootId: string,
   mode: QueryMode,
-  _options?: { maxHops?: number },
+  options?: ReachabilityOptions,
 ): ReachabilityResult {
+  const { schema, relations } = graph;
   const adj = buildAdjacency(schema, relations, mode);
-  const { visited, parent, perHop, maxHop } = bfs(adj, rootId);
+  const { visited, parent, perHop } = bfs(adj, rootId, options?.maxHops);
 
   // Build chains ordered shortest-hop-first, then by id for stability.
   const hopOf = (id: string): number => {
@@ -260,16 +278,15 @@ const memoCache = new Map<string, ReachabilityResult>();
 
 export function computeReachabilityMemo(
   graphRevision: string,
-  schema: TwinSchema,
-  objects: TwinObject[],
-  relations: TwinRelation[],
+  graph: Graph,
   rootId: string,
   mode: QueryMode,
+  options?: ReachabilityOptions,
 ): ReachabilityResult {
   const key = `${graphRevision}|${rootId}|${mode}`;
   const hit = memoCache.get(key);
   if (hit) return hit;
-  const result = computeReachability(schema, objects, relations, rootId, mode);
+  const result = computeReachability(graph, rootId, mode, options);
   memoCache.set(key, result);
   return result;
 }
@@ -278,7 +295,10 @@ export function clearReachabilityCache(): void {
   memoCache.clear();
 }
 
-/** Stable hash of the graph used as a memo key. */
+/**
+ * Stable content hash of the graph used as a memo key. Lives in the pure engine
+ * module so the store and the view share one implementation (no duplicated hash).
+ */
 export function graphRevisionOf(
   objects: TwinObject[],
   relations: TwinRelation[],

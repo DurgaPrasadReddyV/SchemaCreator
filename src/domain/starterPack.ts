@@ -345,6 +345,7 @@ const RELATION_TYPES: RelationTypeDef[] = [
       'type.column',
     ],
     propagatesReachability: false,
+    direction: 'forward',
   },
   {
     id: 'rel.accesses',
@@ -354,6 +355,7 @@ const RELATION_TYPES: RelationTypeDef[] = [
     fromTypeIds: ['type.databaseUser', 'type.role'],
     toTypeIds: ['type.table', 'type.column'],
     propagatesReachability: true,
+    direction: 'bidirectional',
   },
   {
     id: 'rel.memberOf',
@@ -363,6 +365,7 @@ const RELATION_TYPES: RelationTypeDef[] = [
     fromTypeIds: ['type.databaseUser'],
     toTypeIds: ['type.role'],
     propagatesReachability: true,
+    direction: 'forward',
     modeDependent: true,
   },
   {
@@ -373,6 +376,7 @@ const RELATION_TYPES: RelationTypeDef[] = [
     fromTypeIds: ['type.databaseUser'],
     toTypeIds: ['type.sqlLogin'],
     propagatesReachability: true,
+    direction: 'bidirectional',
   },
   {
     id: 'rel.usedAsServiceAccountBy',
@@ -382,6 +386,7 @@ const RELATION_TYPES: RelationTypeDef[] = [
     fromTypeIds: ['type.webService'],
     toTypeIds: ['type.sqlLogin'],
     propagatesReachability: true,
+    direction: 'bidirectional',
   },
   {
     id: 'rel.exposes',
@@ -391,6 +396,7 @@ const RELATION_TYPES: RelationTypeDef[] = [
     fromTypeIds: ['type.webService'],
     toTypeIds: ['type.apiEndpoint'],
     propagatesReachability: true,
+    direction: 'bidirectional',
   },
   {
     id: 'rel.returns',
@@ -400,6 +406,7 @@ const RELATION_TYPES: RelationTypeDef[] = [
     fromTypeIds: ['type.apiEndpoint'],
     toTypeIds: ['type.column', 'type.table'],
     propagatesReachability: true,
+    direction: 'bidirectional',
   },
   {
     id: 'rel.calls',
@@ -409,6 +416,7 @@ const RELATION_TYPES: RelationTypeDef[] = [
     fromTypeIds: ['type.uiApp'],
     toTypeIds: ['type.apiEndpoint'],
     propagatesReachability: true,
+    direction: 'bidirectional',
   },
   {
     id: 'rel.uses',
@@ -418,6 +426,7 @@ const RELATION_TYPES: RelationTypeDef[] = [
     fromTypeIds: ['type.user'],
     toTypeIds: ['type.uiApp'],
     propagatesReachability: true,
+    direction: 'bidirectional',
   },
 ];
 
