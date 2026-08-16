@@ -15,13 +15,15 @@ export interface BootstrapResult {
   doc: TwinDoc | null;
   activeTwinId: string | null;
   theme: 'light' | 'dark' | null;
+  activeView: string | null;
 }
 
 export async function bootstrapFirstRun(): Promise<BootstrapResult> {
   const db = getDb();
-  const [theme, savedActiveId, allTwins] = await Promise.all([
+  const [theme, savedActiveId, savedActiveView, allTwins] = await Promise.all([
     getKv<'light' | 'dark'>('theme'),
     getKv<string>('activeTwinId'),
+    getKv<string>('activeView'),
     db.twins.toArray(),
   ]);
 
@@ -29,7 +31,7 @@ export async function bootstrapFirstRun(): Promise<BootstrapResult> {
     const demo = buildAcmeDemoTwin();
     await putTwin(demo);
     await setKv('activeTwinId', demo.id);
-    return { doc: demo, activeTwinId: demo.id, theme: theme ?? 'dark' };
+    return { doc: demo, activeTwinId: demo.id, theme: theme ?? 'dark', activeView: savedActiveView ?? null };
   }
 
   const activeId = savedActiveId && allTwins.find((t) => t.id === savedActiveId)
@@ -38,5 +40,5 @@ export async function bootstrapFirstRun(): Promise<BootstrapResult> {
 
   const doc = (await db.twins.get(activeId)) ?? allTwins[0];
   await setKv('activeTwinId', doc.id);
-  return { doc, activeTwinId: doc.id, theme: theme ?? 'dark' };
+  return { doc, activeTwinId: doc.id, theme: theme ?? 'dark', activeView: savedActiveView ?? null };
 }

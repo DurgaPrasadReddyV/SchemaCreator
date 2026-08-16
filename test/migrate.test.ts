@@ -10,14 +10,40 @@ import assert from 'node:assert/strict';
 import {
   migrateTwinDoc,
   detectRepairConflicts,
+  resolveRepairConflicts,
   exportTwin,
   exportTwinJson,
   importTwinJson,
 } from '../src/domain/migrate';
-import { reorderSections, reorderFields } from '../src/domain/schemaOps';
+import {
+  reorderSections,
+  reorderFields,
+  addType,
+  updateType,
+  removeType,
+  addRelationType,
+  updateRelationType,
+  removeRelationType,
+  addCapability,
+  updateCapability,
+  removeCapability,
+  addDataCategory,
+  updateDataCategory,
+  removeDataCategory,
+  generatedId,
+} from '../src/domain/schemaOps';
 import { buildAcmeDemoTwin } from '../src/domain/demoTwin';
 import { buildStarterPack } from '../src/domain/starterPack';
-import type { SectionDef, TwinDoc, TwinObject, TwinSchema, TypeDef } from '../src/domain/types';
+import type {
+  CapabilityDef,
+  DataCategoryDef,
+  RelationTypeDef,
+  SectionDef,
+  TwinDoc,
+  TwinObject,
+  TwinSchema,
+  TypeDef,
+} from '../src/domain/types';
 
 test('migrateTwinDoc: normalizes an older-shape doc without dropping data', () => {
   // Older-shape: missing queryHistory, meta, graphLayout, schemaVersion=0
@@ -466,4 +492,214 @@ test('reorderFields: leaves the other Types strictly equal to the originals', ()
     const same = next.types.find((x) => x.id === t.id);
     assert.deepEqual(same, t);
   }
+});
+
+// --- resolveRepairConflicts (seam 2) -----------------------------------
+//
+// The user-triggered "discard" action. It must remove orphaned values and
+// clear invalid-for-type values for objects of one Type only, while preserving
+// NAME_FIELD_ID and every non-conflicting value, and never touching objects of
+// other Types.
+
+test('resolveRepairConflicts: drops orphaned values and clears invalid values, keeps the rest', () => {
+  const schema = buildStarterPack();
+  const userType = schema.types.find((t) => t.id === 'type.user')!;
+  const withoutEmail: TypeDef = {
+    ...userType,
+    sections: userType.sections.map((s) => ({
+      ...s,
+      fields: s.fields.map((f) =>
+        // Change `username` to a number type so its existing string value is invalid.
+        f.id === 'username' ? { ...f, type: 'number' as const } : f,
+      ).filter((f) => f.id !== 'email'),
+    })),
+  };
+  const newSchema: TwinSchema = {
+    ...schema,
+    types: schema.types.map((t) => (t.id === 'type.user' ? withoutEmail : t)),
+  };
+  const objs: TwinObject[] = [
+    {
+      id: 'u1',
+      typeId: 'type.user',
+      values: { name: 'Jane', email: 'j@a', username: 'jdoe', department: 'Eng' },
+      capabilities: [],
+    },
+  ];
+  // Before: a conflict exists (email orphaned, username invalid).
+  assert.ok(detectRepairConflicts(newSchema, objs).length > 0);
+  const resolved = resolveRepairConflicts(newSchema, objs, 'type.user');
+  const u = resolved.find((o) => o.id === 'u1')!;
+  assert.equal(u.values.name, 'Jane', 'NAME_FIELD_ID preserved');
+  assert.equal(u.values.email, undefined, 'orphaned email dropped');
+  assert.equal(u.values.username, undefined, 'invalid username cleared');
+  assert.equal(u.values.department, 'Eng', 'non-conflicting value preserved');
+  // After: no conflicts remain for that type.
+  assert.deepEqual(detectRepairConflicts(newSchema, resolved), []);
+});
+
+test('resolveRepairConflicts: only touches objects of the given Type', () => {
+  const schema = buildStarterPack();
+  const userType = schema.types.find((t) => t.id === 'type.user')!;
+  const withoutEmail: TypeDef = {
+    ...userType,
+    sections: userType.sections.map((s) => ({
+      ...s,
+      fields: s.fields.filter((f) => f.id !== 'email'),
+    })),
+  };
+  const newSchema: TwinSchema = {
+    ...schema,
+    types: schema.types.map((t) => (t.id === 'type.user' ? withoutEmail : t)),
+  };
+  const objs: TwinObject[] = [
+    { id: 'u1', typeId: 'type.user', values: { name: 'Jane', email: 'j@a' }, capabilities: [] },
+    { id: 's1', typeId: 'type.server', values: { name: 'srv', hostname: 'h' }, capabilities: [] },
+  ];
+  const resolved = resolveRepairConflicts(newSchema, objs, 'type.user');
+  const u = resolved.find((o) => o.id === 'u1')!;
+  const s = resolved.find((o) => o.id === 's1')!;
+  assert.equal(u.values.email, undefined, 'user orphaned value dropped');
+  assert.deepEqual(s.values, { name: 'srv', hostname: 'h' }, 'server object untouched');
+});
+
+test('resolveRepairConflicts: unknown typeId returns objects unchanged (same refs)', () => {
+  const schema = buildStarterPack();
+  const objs: TwinObject[] = [
+    { id: 'u1', typeId: 'type.user', values: { name: 'Jane' }, capabilities: [] },
+  ];
+  const resolved = resolveRepairConflicts(schema, objs, 'type.doesNotExist');
+  assert.equal(resolved, objs, 'same array reference when typeId unknown');
+});
+
+test('resolveRepairConflicts: preserves NAME_FIELD_ID even when no name field def exists', () => {
+  // A Type with no fields at all — name is the well-known identity key and must survive.
+  const schema = buildStarterPack();
+  const emptyType: TypeDef = {
+    id: 'type.empty',
+    name: 'Empty',
+    icon: 'AppstoreOutlined',
+    sections: [],
+  };
+  const newSchema: TwinSchema = { ...schema, types: [...schema.types, emptyType] };
+  const objs: TwinObject[] = [
+    { id: 'e1', typeId: 'type.empty', values: { name: 'Thing', extra: 'x' }, capabilities: [] },
+  ];
+  const resolved = resolveRepairConflicts(newSchema, objs, 'type.empty');
+  assert.equal(resolved[0].values.name, 'Thing', 'name preserved');
+  assert.equal(resolved[0].values.extra, undefined, 'orphaned extra dropped');
+});
+
+// --- schemaOps CRUD helpers (seam 2) -----------------------------------
+
+test('generatedId: produces prefix.slug-suffix from a name', () => {
+  const id = generatedId('type', 'Customer Order');
+  assert.ok(id.startsWith('type.customer-order-'), `got ${id}`);
+  assert.ok(id.length > 'type.customer-order-'.length, 'has a uniqueness suffix');
+});
+
+test('addType/updateType/removeType: add then update then remove, ids preserved', () => {
+  const schema = buildStarterPack();
+  const before = schema.types.length;
+  const t: TypeDef = {
+    id: 'type.custom',
+    name: 'Custom',
+    icon: 'AppstoreOutlined',
+    sections: [{ id: 'sec.x', name: 'X', fields: [{ id: 'name', name: 'Name', type: 'text', required: true }] }],
+  };
+  const added = addType(schema, t);
+  assert.equal(added.types.length, before + 1);
+  assert.equal(added.types[added.types.length - 1].id, 'type.custom');
+
+  const updated = updateType(added, { ...t, name: 'Renamed' });
+  assert.equal(updated.types.find((x) => x.id === 'type.custom')!.name, 'Renamed');
+
+  const removed = removeType(updated, 'type.custom');
+  assert.equal(removed.types.length, before);
+  assert.equal(removed.types.some((x) => x.id === 'type.custom'), false);
+});
+
+test('updateType/removeType: unknown id returns the same schema reference', () => {
+  const schema = buildStarterPack();
+  assert.equal(updateType(schema, { id: 'type.nope', name: 'x', icon: 'x', sections: [] }), schema);
+  assert.equal(removeType(schema, 'type.nope'), schema);
+});
+
+test('addRelationType/updateRelationType/removeRelationType: round-trip, id preserved', () => {
+  const schema = buildStarterPack();
+  const before = schema.relationTypes.length;
+  const rt: RelationTypeDef = {
+    id: 'rel.custom',
+    name: 'custom',
+    forwardLabel: 'fwd',
+    reverseLabel: 'rev',
+    fromTypeIds: ['type.user'],
+    toTypeIds: ['type.server'],
+    propagatesReachability: true,
+    direction: 'bidirectional',
+  };
+  const added = addRelationType(schema, rt);
+  assert.equal(added.relationTypes.length, before + 1);
+  const updated = updateRelationType(added, { ...rt, name: 'renamed' });
+  assert.equal(updated.relationTypes.find((x) => x.id === 'rel.custom')!.name, 'renamed');
+  const removed = removeRelationType(updated, 'rel.custom');
+  assert.equal(removed.relationTypes.length, before);
+  // unknown id → same ref
+  assert.equal(removeRelationType(schema, 'rel.nope'), schema);
+});
+
+test('addCapability/updateCapability/removeCapability: round-trip, id preserved', () => {
+  const schema = buildStarterPack();
+  const before = schema.capabilities.length;
+  const cap: CapabilityDef = {
+    id: 'cap.custom',
+    name: 'Custom',
+    abbreviation: 'cst',
+    homeTypes: ['type.user'],
+  };
+  const added = addCapability(schema, cap);
+  assert.equal(added.capabilities.length, before + 1);
+  const updated = updateCapability(added, { ...cap, abbreviation: 'xc' });
+  assert.equal(updated.capabilities.find((x) => x.id === 'cap.custom')!.abbreviation, 'xc');
+  const removed = removeCapability(updated, 'cap.custom');
+  assert.equal(removed.capabilities.length, before);
+  assert.equal(removeCapability(schema, 'cap.nope'), schema);
+});
+
+test('addDataCategory/updateDataCategory/removeDataCategory: round-trip, id preserved', () => {
+  const schema = buildStarterPack();
+  const before = schema.dataCategories.length;
+  const cat: DataCategoryDef = {
+    id: 'cat.custom',
+    name: 'Custom',
+    icon: 'TagOutlined',
+    defaultClassification: 'internal',
+    recommendedCapabilities: ['audit-logging'],
+  };
+  const added = addDataCategory(schema, cat);
+  assert.equal(added.dataCategories.length, before + 1);
+  const updated = updateDataCategory(added, { ...cat, defaultClassification: 'restricted' });
+  assert.equal(
+    updated.dataCategories.find((x) => x.id === 'cat.custom')!.defaultClassification,
+    'restricted',
+  );
+  const removed = removeDataCategory(updated, 'cat.custom');
+  assert.equal(removed.dataCategories.length, before);
+  assert.equal(removeDataCategory(schema, 'cat.nope'), schema);
+});
+
+test('CRUD helpers leave the rest of the schema untouched', () => {
+  const schema = buildStarterPack();
+  const cat: DataCategoryDef = {
+    id: 'cat.x',
+    name: 'X',
+    icon: 'TagOutlined',
+    defaultClassification: 'internal',
+    recommendedCapabilities: [],
+  };
+  const added = addDataCategory(schema, cat);
+  // Everything except dataCategories is the same reference.
+  assert.equal(added.types, schema.types);
+  assert.equal(added.relationTypes, schema.relationTypes);
+  assert.equal(added.capabilities, schema.capabilities);
 });
